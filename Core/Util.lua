@@ -49,3 +49,19 @@ function addon:Debounce(key, delay, fn)
     }
     debounceFrame:Show()
 end
+
+-- AzerothCore intercepts '.' on any chat type. SAY is blocked as a ghost.
+function addon:SendServerCommand(command)
+    local name = UnitName("player")
+    if name and name ~= "" then
+        SendChatMessage(command, "WHISPER", nil, name)
+        return
+    end
+    if GetNumRaidMembers() > 0 then
+        SendChatMessage(command, "RAID")
+    elseif GetNumPartyMembers() > 0 then
+        SendChatMessage(command, "PARTY")
+    elseif not UnitIsDeadOrGhost("player") then
+        SendChatMessage(command, "SAY")
+    end
+end

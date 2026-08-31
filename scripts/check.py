@@ -135,7 +135,21 @@ def fire_loaded(lua) -> None:
 
 def last_sent(lua) -> list[str]:
     sent = lua.eval("wow.sent")
-    return [sent[i] for i in range(1, len(sent) + 1)]
+    out = []
+    for i in range(1, len(sent) + 1):
+        item = sent[i]
+        msg = getattr(item, "msg", None)
+        out.append(msg if msg is not None else str(item))
+    return out
+
+
+def last_sent_types(lua) -> list[str]:
+    sent = lua.eval("wow.sent")
+    out = []
+    for i in range(1, len(sent) + 1):
+        item = sent[i]
+        out.append(getattr(item, "chatType", None))
+    return out
 
 
 def last_prints(lua) -> list[str]:
@@ -179,10 +193,15 @@ def test_addon(lua) -> None:
     wow.state.xpDisabled = False
     party.SyncXP(party)
     sent = last_sent(lua)
-    if sent == [".xp off"]:
+    if sent == [".xp disable"]:
         ok("solo sends .xp off")
     else:
-        fail(f"solo sent {sent}, expected ['.xp off']")
+        fail(f"solo sent {sent}, expected ['.xp disable']")
+    types = last_sent_types(lua)
+    if types == ["WHISPER"]:
+        ok("alive sync uses WHISPER not SAY")
+    else:
+        fail(f"alive sync types {types}, expected ['WHISPER']")
 
     wow.resetChat()
     party.SyncXP(party)
@@ -197,50 +216,91 @@ def test_addon(lua) -> None:
     wow.state.xpDisabled = True
     party.SyncXP(party)
     sent = last_sent(lua)
-    if sent == [".xp on"]:
+    if sent == [".xp enable"]:
         ok("online party member sends .xp on")
     else:
-        fail(f"online party sent {sent}, expected ['.xp on']")
+        fail(f"online party sent {sent}, expected ['.xp enable']")
 
     wow.resetChat()
     wow.setParty(False)
     wow.state.xpDisabled = False
     party.SyncXP(party)
     sent = last_sent(lua)
-    if sent == [".xp off"]:
+    if sent == [".xp disable"]:
         ok("offline-only party sends .xp off")
     else:
-        fail(f"offline party sent {sent}, expected ['.xp off']")
+        fail(f"offline party sent {sent}, expected ['.xp disable']")
 
     wow.resetChat()
     wow.setRaidSelfOnly()
     wow.state.xpDisabled = False
     party.SyncXP(party)
     sent = last_sent(lua)
-    if sent == [".xp off"]:
+    if sent == [".xp disable"]:
         ok("raid of self only sends .xp off")
     else:
-        fail(f"raid-self sent {sent}, expected ['.xp off']")
+        fail(f"raid-self sent {sent}, expected ['.xp disable']")
 
     wow.resetChat()
     wow.setRaidWithPartner(True)
     wow.state.xpDisabled = True
     party.SyncXP(party)
     sent = last_sent(lua)
-    if sent == [".xp on"]:
+    if sent == [".xp enable"]:
         ok("raid with online partner sends .xp on")
     else:
-        fail(f"raid-partner sent {sent}, expected ['.xp on']")
+        fail(f"raid-partner sent {sent}, expected ['.xp enable']")
 
     wow.resetChat()
     wow.setRaidWithPartner(False)
     wow.state.xpDisabled = False
     party.SyncXP(party)
     sent = last_sent(lua)
-    if sent == [".xp off"]:
+    if sent == [".xp disable"]:
         ok("raid partner offline sends .xp off")
     else:
-        fail(f"raid-offline-partner sent {sent}, expected ['.xp off']")
+        fail(f"raid-offline-partner sent {sent}, expected ['.xp disable']")
+
+    wow.resetChat()
+    wow.state.ghost = True
+    wow.setParty(False)
+    wow.state.xpDisabled = False
+    party.SyncXP(party)
+    sent = last_sent(lua)
+    types = last_sent_types(lua)
+    if sent == [".xp disable"] and types == ["WHISPER"] and wow.state.xpDisabled:
+        ok("ghost party-leave still sends .xp off via WHISPER")
+    else:
+        fail(f"ghost whisper sent {sent} types {types} xpDisabled={wow.state.xpDisabled}")
+
+    wow.resetChat()
+    wow.state.playerName = ""
+    wow.state.ghost = True
+    wow.setSolo()
+    wow.state.xpDisabled = False
+    party.SyncXP(party)
+    sent = last_sent(lua)
+    if sent == [] and not wow.state.xpDisabled:
+        ok("ghost SAY fallback is dropped (no name, no group)")
+    else:
+        fail(f"ghost SAY-only sent {sent} xpDisabled={wow.state.xpDisabled}")
+
+    wow.state.playerName = "Ed"
+    wow.state.ghost = False
+    wow.resetChat()
+    addon.OnEvent(addon, "PLAYER_ALIVE")
+    sent = last_sent(lua)
+    if sent == []:
+        ok("PLAYER_ALIVE is debounced")
+    else:
+        fail(f"PLAYER_ALIVE sent immediately {sent}")
+    wow.flushDebounce()
+    sent = last_sent(lua)
+    types = last_sent_types(lua)
+    if sent == [".xp disable"] and types == ["WHISPER"] and wow.state.xpDisabled:
+        ok("PLAYER_ALIVE retries .xp off after rez")
+    else:
+        fail(f"PLAYER_ALIVE after tick sent {sent} types {types} xpDisabled={wow.state.xpDisabled}")
 
     addon.DisableModule(addon, "PartyXP")
     if not party.enabled:
@@ -274,10 +334,10 @@ def test_addon(lua) -> None:
         fail(f"debounced sync sent immediately: {sent}")
     wow.flushDebounce()
     sent = last_sent(lua)
-    if sent == [".xp off"]:
+    if sent == [".xp disable"]:
         ok("debounce fires after 0.2s")
     else:
-        fail(f"after tick sent {sent}, expected ['.xp off']")
+        fail(f"after tick sent {sent}, expected ['.xp disable']")
 
     wow.resetChat()
     wow.setSolo()
@@ -286,7 +346,7 @@ def test_addon(lua) -> None:
     party.RequestSync(party)
     wow.flushDebounce()
     sent = last_sent(lua)
-    if sent == [".xp off"]:
+    if sent == [".xp disable"]:
         ok("burst RequestSync sends once")
     else:
         fail(f"burst debounce sent {sent}")

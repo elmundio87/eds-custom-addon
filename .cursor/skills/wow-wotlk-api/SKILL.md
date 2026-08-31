@@ -32,7 +32,8 @@ Read the local cache before guessing an API:
 | Roster events | `PARTY_MEMBERS_CHANGED`, `RAID_ROSTER_UPDATE` |
 | Online/offline hints | `PARTY_MEMBER_DISABLE`, `PARTY_MEMBER_ENABLE` |
 | Login/reload scan | `PLAYER_ENTERING_WORLD` |
-| Server XP toggle | `SendChatMessage(".xp on" or ".xp off", "SAY")` |
+| Rez / leave ghost | `PLAYER_ALIVE`, `PLAYER_UNGHOST` |
+| Server XP toggle | `addon:SendServerCommand(db.xp.enable or db.xp.disable)` |
 
 ## Details
 

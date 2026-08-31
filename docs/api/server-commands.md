@@ -4,27 +4,40 @@ Server GM/player commands are **dot-commands**. The client has no `SlashCmdList`
 
 ## Sending a command
 
+Use `addon:SendServerCommand(command)`. It whispers the player so AzerothCore still sees the leading `.` when `/say` is blocked (ghost). Nearby players do not see the command.
+
 ```lua
-SendChatMessage(".xp off", "SAY")
-SendChatMessage(".xp on", "SAY")
+addon:SendServerCommand(addon.db.xp.disable)
+addon:SendServerCommand(addon.db.xp.enable)
 ```
 
-`SendChatMessage(msg [, chatType [, language [, channel]]])`. Default chat type is `"SAY"`. Max 255 characters.
+Fallback if `UnitName("player")` is empty: `RAID`, then `PARTY`, then `SAY` only while alive (`UnitIsDeadOrGhost` is false).
 
 Do **not** send `SendChatMessage("/xp off")`. A leading slash is a client command, not a server command.
 
-Sibling addons (Chatter) use the same pattern: `SendChatMessage(".llmc " .. command, "SAY")`.
+Do **not** send server commands with `"SAY"` from feature modules. Ghosts cannot `/say`; the line never reaches the server.
 
-## ChromieCraft XP toggle
+## This server: `mod-individual-xp`
+
+The live realm answers unknown `.xp` args with a usage dump (`default`, `disable`, `enable`, `set`, `view`). **`.xp on` / `.xp off` are not valid here** — they print help and do not change the XP flag.
 
 | Command | Effect |
 |---------|--------|
-| `.xp on` | Re-enable XP gain |
-| `.xp off` | Disable XP gain |
+| `.xp enable` | Re-enable XP gain |
+| `.xp disable` | Disable XP gain |
+| `.xp view` | Show current rate |
+| `.xp set <n>` | Set personal multiplier |
+| `.xp default` | Reset to server default |
 
-This sets `PLAYER_FLAGS_NO_XP_GAIN` on the character.
+Defaults live in `EdsCustomAddonDB.xp`:
 
-Client read-back:
+```lua
+xp = { enable = ".xp enable", disable = ".xp disable" }
+```
+
+If a realm uses ChromieCraft-style `.xp on` / `.xp off`, change those two strings. Do not leave `on`/`off` on a `mod-individual-xp` server.
+
+Client read-back (both modules set the same flag):
 
 ```lua
 -- 1 if XP is disabled, nil if enabled
@@ -35,13 +48,7 @@ end
 
 PartyXP only sends a command when the desired state differs from `IsXPUserDisabled()`, so `/reload` does not spam `.xp`.
 
-## Other AC modules (not this server)
-
-`mod-individual-xp` uses `.xp enable` / `.xp disable` / `.xp set <n>`. ChromieCraft uses `.xp on|off`. Match the server.
-
 ## Addon slash commands (client)
-
-Register a client slash handler with:
 
 ```lua
 SLASH_EDSCUSTOMADDON1 = "/eca"
@@ -50,4 +57,4 @@ SlashCmdList["EDSCUSTOMADDON"] = function(msg)
 end
 ```
 
-This addon: `/eca partyxp on|off|status` and `/eca debug`.
+This addon: `/eca ui`, `/eca partyxp on|off|status`, `/eca debug`.

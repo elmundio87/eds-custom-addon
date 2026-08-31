@@ -8,7 +8,7 @@ This is not a full Blizzard API dump. Use it for party/raid roster, XP flags, ev
 
 - [events.md](events.md) — party, raid, login, XP events
 - [group-roster.md](group-roster.md) — `GetNum*`, unit tokens, `UnitIsConnected`
-- [server-commands.md](server-commands.md) — `.xp on|off` via `SendChatMessage`
+- [server-commands.md](server-commands.md) — `.xp enable|disable` via `SendServerCommand`
 
 ## Client rules
 

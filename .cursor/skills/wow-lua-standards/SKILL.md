@@ -20,7 +20,7 @@ disable-model-invocation: true
 1. **Locals first.** File-scope `local addon = EdsCustomAddon`. Do not pollute `_G`.
 2. **Event-driven.** Do not poll roster or XP on `OnUpdate`. `OnUpdate` is allowed only for debounce in `Core/Util.lua`.
 3. **Debounce bursts.** `PARTY_MEMBERS_CHANGED` can fire several times. Use `addon:Debounce(key, 0.2, fn)`.
-4. **Server commands are dots.** `SendChatMessage(".xp off", "SAY")`. Never `SendChatMessage("/xp ...")`.
+4. **Server commands are dots.** `addon:SendServerCommand(addon.db.xp.disable)` (whisper-self). Never `SendChatMessage("/xp ...")`, never SAY from modules, never `.xp on|off` on `mod-individual-xp` (use `enable`/`disable`).
 5. **Idempotent side effects.** Compare desired state to `IsXPUserDisabled()` (or equivalent) before sending a command.
 6. **Skip self in raids.** `GetNumRaidMembers()` includes the player; `GetNumPartyMembers()` does not. Use `UnitIsUnit(unit, "player")`.
 7. **Truthiness.** Many APIs return `1` or `nil`. Prefer `if UnitIsConnected(unit) then` or `and true or false` when storing a boolean.

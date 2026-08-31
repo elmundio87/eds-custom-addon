@@ -9,6 +9,8 @@ Register on a frame with `frame:RegisterEvent("EVENT_NAME")`. Handler: `OnEvent(
 | `ADDON_LOADED` | `arg1` = addon name (folder name). SavedVariables are available. Fire once per addon. |
 | `PLAYER_LOGIN` | Player is in-world enough for most APIs. After all `ADDON_LOADED`. |
 | `PLAYER_ENTERING_WORLD` | Login, `/reload`, and zoning. Good for an initial roster scan. |
+| `PLAYER_ALIVE` | Resurrected (including in-place). Use to retry commands that `/say` could not send as a ghost. |
+| `PLAYER_UNGHOST` | Left ghost form. Same retry as `PLAYER_ALIVE`. |
 
 ## Party / raid
 
@@ -32,10 +34,11 @@ There is no `GROUP_ROSTER_UPDATE` in 3.3.5.
 | `PLAYER_LEVEL_UP` | Level up. |
 | `UPDATE_EXHAUSTION` | Rested state changed. |
 
-`IsXPUserDisabled()` is a function, not an event. Poll it after sending `.xp on|off`; the flag may update on the next tick.
+`IsXPUserDisabled()` is a function, not an event. Poll it after sending `.xp enable|disable`; the flag may update on the next tick.
 
 ## Patterns used in this addon
 
 - Debounce roster handlers (~0.2s). `PARTY_MEMBERS_CHANGED` bursts.
 - Re-scan the full roster on `PARTY_MEMBER_DISABLE` / `PARTY_MEMBER_ENABLE` instead of trusting `arg1`.
 - First XP sync on `PLAYER_ENTERING_WORLD`, not only on `ADDON_LOADED` (roster can still be empty at load).
+- Retry XP sync on `PLAYER_ALIVE` / `PLAYER_UNGHOST` (in-place rez may not fire `PLAYER_ENTERING_WORLD`).

@@ -42,13 +42,17 @@ The debounce frame lives in `Core/Util.lua`. Do not create extra `OnUpdate` fram
 ## Sending `.xp` (and other GM commands)
 
 ```lua
-SendChatMessage(".xp on", "SAY")
-SendChatMessage(".xp off", "SAY")
+addon:SendServerCommand(addon.db.xp.enable)
+addon:SendServerCommand(addon.db.xp.disable)
 ```
+
+Whispers `UnitName("player")` so the command works while dead/ghost. SAY is only a last-resort fallback when the name is missing and the player is alive.
+
+This realm's module is `mod-individual-xp`: `.xp enable` / `.xp disable`. `.xp on` / `.xp off` print usage and do nothing. Override `db.xp.enable` / `db.xp.disable` for ChromieCraft-style commands.
 
 Read-back: `IsXPUserDisabled()` → `1` if XP is off.
 
-Only send when the flag disagrees with the desired state.
+Only send when the flag disagrees with the desired state. PartyXP also resyncs on `PLAYER_ALIVE` / `PLAYER_UNGHOST`.
 
 ## Group scan
 
@@ -72,7 +76,9 @@ end
 | `IsInGroup()` | `GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0` |
 | `GROUP_ROSTER_UPDATE` | `PARTY_MEMBERS_CHANGED` + `RAID_ROSTER_UPDATE` |
 | `C_Timer.After(0.2, fn)` | `addon:Debounce` |
-| `SendChatMessage("/xp off")` | `SendChatMessage(".xp off", "SAY")` |
+| `SendChatMessage("/xp off")` | `addon:SendServerCommand(addon.db.xp.disable)` |
+| `SendChatMessage(".xp off", "SAY")` | `addon:SendServerCommand(addon.db.xp.disable)` |
+| `.xp on` / `.xp off` on this server | `.xp enable` / `.xp disable` |
 | Polling roster in OnUpdate | Events + debounce |
 | `raid1` without skipping player | `UnitIsUnit(unit, "player")` |
 | Global `function SyncXP()` | `function PartyXP:SyncXP()` |

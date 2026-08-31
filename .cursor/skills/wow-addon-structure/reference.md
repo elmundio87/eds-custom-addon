@@ -34,6 +34,7 @@ Core `OnEvent` swallows `ADDON_LOADED` for this addon. Every other event is forw
 addon.defaults = {
     debug = false,
     ui = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 },
+    xp = { enable = ".xp enable", disable = ".xp disable" },
     modules = {
         PartyXP = { enabled = true },
     },

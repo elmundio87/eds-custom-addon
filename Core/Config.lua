@@ -8,6 +8,10 @@ addon.defaults = {
         x = 0,
         y = 0,
     },
+    xp = {
+        enable = ".xp enable",
+        disable = ".xp disable",
+    },
     modules = {
         PartyXP = {
             enabled = true,

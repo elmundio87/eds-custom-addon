@@ -15,9 +15,9 @@ WotLK 3.3.5a (`Interface: 30300`) addon for a private AzerothCore / ChromieCraft
 
 ## Party XP
 
-XP is turned **on** only when you are in a party or raid and at least one other member is online (`UnitIsConnected`). Solo, an empty party shell, or every other member offline → `.xp off`.
+XP is turned **on** only when you are in a party or raid and at least one other member is online (`UnitIsConnected`). Solo, an empty party shell, or every other member offline → `.xp disable`.
 
-The addon talks to the server with `SendChatMessage(".xp on", "SAY")` / `SendChatMessage(".xp off", "SAY")`. It compares against `IsXPUserDisabled()` so it does not resend the same state.
+The addon talks to the server with `addon:SendServerCommand` using `.xp enable` / `.xp disable` (`mod-individual-xp` on this realm). `.xp on` / `.xp off` only print usage and do not change XP. Whisper-to-self so it still works as a ghost. It compares against `IsXPUserDisabled()` so it does not resend the same state.
 
 Login already in a party whose members are offline counts as no online partner → XP stays off until someone comes online.
 
@@ -60,11 +60,11 @@ CI runs `python scripts/check.py` on every push/PR to `main` (GitHub Actions). T
 
 ## In-game checks
 
-1. Solo login → `.xp off` (status: `wantXP=off`, `serverXP=off`).
-2. Join a party with an online member → `.xp on`.
-3. That member goes offline → `.xp off`.
-4. Login already in a party, others offline → `.xp off` after `PLAYER_ENTERING_WORLD`.
-5. Raid with one other online member → `.xp on`.
+1. Solo login → `.xp disable` (status: `wantXP=off`, `serverXP=off`).
+2. Join a party with an online member → `.xp enable`.
+3. That member goes offline → `.xp disable`.
+4. Login already in a party, others offline → `.xp disable` after `PLAYER_ENTERING_WORLD`.
+5. Raid with one other online member → `.xp enable`.
 6. `/eca partyxp off` → no further auto toggle.
 7. `/reload` → no extra `.xp` if the flag already matches.
 

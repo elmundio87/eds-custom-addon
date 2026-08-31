@@ -11,6 +11,8 @@ wow = {
         connected = {},
         isPlayer = {},
         xpDisabled = false,
+        playerName = "Ed",
+        ghost = false,
     },
 }
 
@@ -136,15 +138,35 @@ function UnitIsUnit(unit, other)
     return (unit == other) and 1 or nil
 end
 
+function UnitIsDeadOrGhost(unit)
+    return wow.state.ghost and 1 or nil
+end
+
+function UnitName(unit)
+    if unit == "player" then
+        return wow.state.playerName
+    end
+    return unit
+end
+
 function IsXPUserDisabled()
     return wow.state.xpDisabled and 1 or nil
 end
 
-function SendChatMessage(msg)
-    table.insert(wow.sent, msg)
-    if msg == ".xp on" then
+function SendChatMessage(msg, chatType, _, target)
+    chatType = chatType or "SAY"
+    table.insert(wow.sent, {
+        msg = msg,
+        chatType = chatType,
+        target = target,
+    })
+    -- Ghosts cannot /say; the client drops the line before the server.
+    if chatType == "SAY" and wow.state.ghost then
+        return
+    end
+    if msg == ".xp on" or msg == ".xp enable" then
         wow.state.xpDisabled = false
-    elseif msg == ".xp off" then
+    elseif msg == ".xp off" or msg == ".xp disable" then
         wow.state.xpDisabled = true
     end
 end

@@ -16,15 +16,14 @@ Full write-ups live in `docs/api/`. This file is a one-page reminder.
 
 - `ADDON_LOADED` — Core only; SavedVariables ready when `arg1 == "Eds Custom Addon"`
 - `PLAYER_ENTERING_WORLD` — initial + zone-in sync
+- `PLAYER_ALIVE` / `PLAYER_UNGHOST` — rez; retry `.xp` if a ghost send failed
 - `PARTY_MEMBERS_CHANGED` — party roster
 - `RAID_ROSTER_UPDATE` — raid roster
 - `PARTY_MEMBER_DISABLE` / `PARTY_MEMBER_ENABLE` — reconnect; `arg1` is a **name**, re-scan anyway
 
 ## XP
 
-ChromieCraft: `.xp on` / `.xp off` (free). Flag: `PLAYER_FLAGS_NO_XP_GAIN`. Client: `IsXPUserDisabled()`.
-
-Other AC modules may use `.xp enable|disable`. This server uses **on/off**.
+ChromieCraft sometimes uses `.xp on` / `.xp off`. **This realm uses `mod-individual-xp`:** `.xp enable` / `.xp disable`. Sending `on`/`off` prints usage and leaves `IsXPUserDisabled()` unchanged. Commands are `db.xp.enable` / `db.xp.disable`.
 
 ## External dumps
 

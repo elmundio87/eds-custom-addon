@@ -57,10 +57,10 @@ function PartyXP:SyncXP()
 
     if wantEnabled and locked then
         addon:Debug("PartyXP: enabling XP")
-        SendChatMessage(".xp on", "SAY")
+        addon:SendServerCommand(addon.db.xp.enable)
     elseif not wantEnabled and not locked then
         addon:Debug("PartyXP: disabling XP")
-        SendChatMessage(".xp off", "SAY")
+        addon:SendServerCommand(addon.db.xp.disable)
     else
         addon:Debug("PartyXP: no change (want=" .. tostring(wantEnabled) .. " locked=" .. tostring(locked) .. ")")
     end
@@ -82,6 +82,8 @@ function PartyXP:Init(owner)
     owner:RegisterEvent("PARTY_MEMBER_DISABLE")
     owner:RegisterEvent("PARTY_MEMBER_ENABLE")
     owner:RegisterEvent("PLAYER_ENTERING_WORLD")
+    owner:RegisterEvent("PLAYER_ALIVE")
+    owner:RegisterEvent("PLAYER_UNGHOST")
 end
 
 function PartyXP:Enable()
@@ -99,6 +101,8 @@ function PartyXP:OnEvent(event)
         or event == "PARTY_MEMBER_DISABLE"
         or event == "PARTY_MEMBER_ENABLE"
         or event == "PLAYER_ENTERING_WORLD"
+        or event == "PLAYER_ALIVE"
+        or event == "PLAYER_UNGHOST"
     then
         self:RequestSync()
     end
