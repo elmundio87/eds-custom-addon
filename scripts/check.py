@@ -71,6 +71,7 @@ def lint_toc() -> None:
         "Core/Core.lua",
         "Core/UI.lua",
         "Modules/PartyXP/PartyXP.lua",
+        "Modules/Windfury/Windfury.lua",
     ]
     if files == expected:
         ok("TOC load order")
@@ -109,6 +110,11 @@ def lint_lua_static() -> None:
         ok("PartyXP registers itself")
     else:
         fail("PartyXP.lua does not call RegisterModule")
+    windfury = (ROOT / "Modules" / "Windfury" / "Windfury.lua").read_text(encoding="utf-8")
+    if "RegisterModule" in windfury:
+        ok("Windfury registers itself")
+    else:
+        fail("Windfury.lua does not call RegisterModule")
 
 
 def lint_syntax(lua) -> None:
@@ -152,6 +158,11 @@ def last_sent_types(lua) -> list[str]:
     return out
 
 
+def last_sounds(lua) -> list[str]:
+    sounds = lua.eval("wow.sounds")
+    return [sounds[i] for i in range(1, len(sounds) + 1)]
+
+
 def last_prints(lua) -> list[str]:
     prints = lua.eval("wow.prints")
     return [prints[i] for i in range(1, len(prints) + 1)]
@@ -187,6 +198,20 @@ def test_addon(lua) -> None:
             fail("panel should start hidden")
         else:
             ok("panel starts hidden")
+        if addon.ui.windfuryPath:
+            ok("panel has Windfury path box")
+            box = addon.ui.windfuryPath
+            box.SetText(box, "Interface\\AddOns\\Eds Custom Addon\\Sounds\\proc.wav")
+            lost = box.scripts.OnEditFocusLost
+            if lost:
+                lost(box)
+            path = addon.db.modules.Windfury.soundFile
+            if path and "proc.wav" in path:
+                ok("GUI sound path saves to db")
+            else:
+                fail(f"GUI path save got {path}")
+        else:
+            fail("panel missing windfuryPath edit box")
 
     wow.resetChat()
     wow.setSolo()
@@ -382,6 +407,106 @@ def test_addon(lua) -> None:
         ok("slash partyxp status prints")
     else:
         fail(f"status prints {prints}")
+
+    wow.resetChat()
+    addon.SlashHandler(addon, "windfury test")
+    sounds = last_sounds(lua)
+    if sounds:
+        ok("windfury test plays sound file")
+    else:
+        fail(f"windfury test sounds {sounds}")
+
+    wow.resetChat()
+    me = lua.eval("wow.state.playerGUID")
+    addon.OnEvent(
+        addon,
+        "COMBAT_LOG_EVENT_UNFILTERED",
+        0,
+        "SPELL_EXTRA_ATTACKS",
+        me,
+        "Ed",
+        0,
+        me,
+        "Ed",
+        0,
+        25505,
+        "Windfury Weapon",
+        1,
+        2,
+    )
+    sounds = last_sounds(lua)
+    if len(sounds) == 1:
+        ok("player Windfury EXTRA_ATTACKS plays once")
+    else:
+        fail(f"WF proc sounds {sounds}")
+
+    wow.resetChat()
+    addon.OnEvent(
+        addon,
+        "COMBAT_LOG_EVENT_UNFILTERED",
+        0,
+        "SPELL_EXTRA_ATTACKS",
+        me,
+        "Ed",
+        0,
+        me,
+        "Ed",
+        0,
+        25505,
+        "Windfury Weapon",
+        1,
+        2,
+    )
+    sounds = last_sounds(lua)
+    if sounds == []:
+        ok("Windfury proc is throttled")
+    else:
+        fail(f"throttled WF still played {sounds}")
+
+    wow.resetChat()
+    lua.eval("wow.time")  # keep lupa warm
+    lua.execute("wow.time = wow.time + 1")
+    addon.OnEvent(
+        addon,
+        "COMBAT_LOG_EVENT_UNFILTERED",
+        0,
+        "SPELL_EXTRA_ATTACKS",
+        "0xDEAD",
+        "Namepoc",
+        0,
+        me,
+        "Ed",
+        0,
+        25505,
+        "Windfury Weapon",
+        1,
+        2,
+    )
+    sounds = last_sounds(lua)
+    if sounds == []:
+        ok("other player's Windfury does not play")
+    else:
+        fail(f"other WF played {sounds}")
+
+    wow.resetChat()
+    lua.execute("wow.time = wow.time + 1")
+    addon.OnEvent(
+        addon,
+        "COMBAT_LOG_EVENT_UNFILTERED",
+        0,
+        "SWING_DAMAGE",
+        me,
+        "Ed",
+        0,
+        "0x2",
+        "Mob",
+        0,
+    )
+    sounds = last_sounds(lua)
+    if sounds == []:
+        ok("swing damage does not play Windfury sound")
+    else:
+        fail(f"swing played {sounds}")
 
     wow.resetChat()
     addon.SlashHandler(addon, "nope")

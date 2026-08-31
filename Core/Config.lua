@@ -16,6 +16,10 @@ addon.defaults = {
         PartyXP = {
             enabled = true,
         },
+        Windfury = {
+            enabled = true,
+            soundFile = "Sound\\Interface\\RaidWarning.wav",
+        },
     },
 }
 

@@ -20,6 +20,7 @@ Full write-ups live in `docs/api/`. This file is a one-page reminder.
 - `PARTY_MEMBERS_CHANGED` — party roster
 - `RAID_ROSTER_UPDATE` — raid roster
 - `PARTY_MEMBER_DISABLE` / `PARTY_MEMBER_ENABLE` — reconnect; `arg1` is a **name**, re-scan anyway
+- `COMBAT_LOG_EVENT_UNFILTERED` — 3.3.5 unpack `...`; no `CombatLogGetCurrentEventInfo`
 
 ## XP
 

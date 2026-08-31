@@ -10,3 +10,4 @@ Core\Config.lua
 Core\Core.lua
 Core\UI.lua
 Modules\PartyXP\PartyXP.lua
+Modules\Windfury\Windfury.lua

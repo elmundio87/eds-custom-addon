@@ -4,6 +4,7 @@ wow = {
     frames = {},
     sent = {},
     prints = {},
+    sounds = {},
     specialFrames = {},
     state = {
         raidCount = 0,
@@ -12,6 +13,7 @@ wow = {
         isPlayer = {},
         xpDisabled = false,
         playerName = "Ed",
+        playerGUID = "0x0000000000000001",
         ghost = false,
     },
 }
@@ -99,6 +101,17 @@ function Frame:SetText(text)
     self.text = text
 end
 
+function Frame:GetText()
+    return self.text or ""
+end
+
+function Frame:SetAutoFocus() end
+function Frame:SetFontObject() end
+function Frame:SetMaxLetters() end
+function Frame:ClearFocus() end
+function Frame:SetFocus() end
+function Frame:HighlightText() end
+
 function Frame:SetChecked(value)
     if value and value ~= 0 then
         self.checked = 1
@@ -149,6 +162,13 @@ function UnitName(unit)
     return unit
 end
 
+function UnitGUID(unit)
+    if unit == "player" then
+        return wow.state.playerGUID
+    end
+    return nil
+end
+
 function IsXPUserDisabled()
     return wow.state.xpDisabled and 1 or nil
 end
@@ -169,6 +189,14 @@ function SendChatMessage(msg, chatType, _, target)
     elseif msg == ".xp off" or msg == ".xp disable" then
         wow.state.xpDisabled = true
     end
+end
+
+function PlaySoundFile(path)
+    table.insert(wow.sounds, path)
+end
+
+function PlaySound(name)
+    table.insert(wow.sounds, name)
 end
 
 DEFAULT_CHAT_FRAME = {
@@ -201,6 +229,7 @@ end
 function wow.resetChat()
     wow.sent = {}
     wow.prints = {}
+    wow.sounds = {}
 end
 
 function wow.setSolo()

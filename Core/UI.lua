@@ -1,6 +1,6 @@
 local addon = EdsCustomAddon
 
-local PANEL_WIDTH = 260
+local PANEL_WIDTH = 380
 local HEADER = 44
 local ROW = 36
 local PAD = 16
@@ -43,6 +43,9 @@ function addon:RefreshUI()
     if panel.debugCheck then
         panel.debugCheck:SetChecked(self.db.debug and 1 or nil)
     end
+    if panel.windfuryPath and self.db.modules.Windfury then
+        panel.windfuryPath:SetText(self.db.modules.Windfury.soundFile or "")
+    end
 end
 
 function addon:ToggleUI()
@@ -64,7 +67,7 @@ function addon:CreateUI()
     local rows = #self.moduleOrder + 1
     local panel = CreateFrame("Frame", "ECA_Panel", UIParent)
     panel:SetWidth(PANEL_WIDTH)
-    panel:SetHeight(HEADER + rows * ROW + PAD)
+    panel:SetHeight(HEADER + rows * ROW + PAD + 50)
     panel:SetFrameStrata("DIALOG")
     panel:SetToplevel(true)
     panel:SetClampedToScreen(true)
@@ -142,6 +145,14 @@ function addon:CreateUI()
         addon.db.debug = self:GetChecked() and true or false
     end)
     panel.debugCheck = debugCheck
+    y = y - ROW
+
+    for _, module in ipairs(self.moduleOrder) do
+        if module.BuildOptions then
+            y = module:BuildOptions(panel, y)
+        end
+    end
+    panel:SetHeight(-y + PAD)
 
     panel:SetScript("OnShow", function()
         addon:RefreshUI()

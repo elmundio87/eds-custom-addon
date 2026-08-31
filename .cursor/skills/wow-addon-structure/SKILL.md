@@ -52,7 +52,7 @@ addon:RegisterModule(MyMod)
 - `Init` runs once after SavedVariables load. `Enable`/`Disable` may run later via `/eca` or `/eca ui`.
 - Register events with `owner:RegisterEvent("EVENT")`. Core dispatches to enabled modules.
 - Keep feature code in the module. Core stays a thin registry + slash router.
-- Registered modules appear automatically on the `/eca ui` panel. Do not put the panel itself in `Modules/`.
+- Registered modules appear automatically on the `/eca ui` panel. Optional `module:BuildOptions(panel, y)` adds extra widgets (must return the next `y`). Do not put the panel itself in `Modules/`.
 
 ## TOC rules
 

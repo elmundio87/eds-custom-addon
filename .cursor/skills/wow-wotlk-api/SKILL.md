@@ -18,7 +18,7 @@ Read the local cache before guessing an API:
 
 ## Does not exist in 3.3.5
 
-`IsInGroup`, `IsInRaid`, `GetNumGroupMembers`, `GetNumSubgroupMembers`, `GROUP_ROSTER_UPDATE`, `C_Timer`, `C_PartyInfo`.
+`IsInGroup`, `IsInRaid`, `GetNumGroupMembers`, `GetNumSubgroupMembers`, `GROUP_ROSTER_UPDATE`, `C_Timer`, `C_PartyInfo`, `CombatLogGetCurrentEventInfo`.
 
 ## Does exist (use these)
 

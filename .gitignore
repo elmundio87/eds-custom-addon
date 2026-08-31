@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.zip
+Sounds/*.wav
+Sounds/*.mp3
+Sounds/*.ogg

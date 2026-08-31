@@ -26,6 +26,14 @@ Register on a frame with `frame:RegisterEvent("EVENT_NAME")`. Handler: `OnEvent(
 
 There is no `GROUP_ROSTER_UPDATE` in 3.3.5.
 
+## Combat log
+
+There is **no** `CombatLogGetCurrentEventInfo()` in 3.3.5. Read `COMBAT_LOG_EVENT_UNFILTERED` from `...`:
+
+`timestamp, subevent, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags`, then spell fields (`spellId`, `spellName`, `spellSchool`, ...) for `SPELL_*` events.
+
+Windfury Weapon extra swings show as `SPELL_EXTRA_ATTACKS` (one event per proc). Extra hits may also appear as `SPELL_DAMAGE` with Windfury Attack ids `25504` / `33750`. Filter `sourceGUID == UnitGUID("player")`.
+
 ## XP
 
 | Event | When |
@@ -42,3 +50,4 @@ There is no `GROUP_ROSTER_UPDATE` in 3.3.5.
 - Re-scan the full roster on `PARTY_MEMBER_DISABLE` / `PARTY_MEMBER_ENABLE` instead of trusting `arg1`.
 - First XP sync on `PLAYER_ENTERING_WORLD`, not only on `ADDON_LOADED` (roster can still be empty at load).
 - Retry XP sync on `PLAYER_ALIVE` / `PLAYER_UNGHOST` (in-place rez may not fire `PLAYER_ENTERING_WORLD`).
+- Windfury sound: `COMBAT_LOG_EVENT_UNFILTERED` args (not `CombatLogGetCurrentEventInfo`); throttle 0.15s per proc.

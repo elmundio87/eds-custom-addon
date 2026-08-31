@@ -11,6 +11,9 @@ WotLK 3.3.5a (`Interface: 30300`) addon for a private AzerothCore / ChromieCraft
 | `/eca partyxp on` | Enable auto XP toggle (default) |
 | `/eca partyxp off` | Stop auto toggling (does not change current XP flag) |
 | `/eca partyxp status` | Module on/off, group kind, desired XP vs server flag |
+| `/eca windfury test` | Play the Windfury proc sound |
+| `/eca windfury on` / `/eca windfury off` | Enable or disable Windfury sound |
+| `/eca windfury sound <path>` | Set a custom `.wav`/`.mp3` (addon folder or `Sound\\...`) |
 | `/eca debug` | Toggle debug prints |
 
 ## Party XP
@@ -20,6 +23,10 @@ XP is turned **on** only when you are in a party or raid and at least one other 
 The addon talks to the server with `addon:SendServerCommand` using `.xp enable` / `.xp disable` (`mod-individual-xp` on this realm). `.xp on` / `.xp off` only print usage and do not change XP. Whisper-to-self so it still works as a ghost. It compares against `IsXPUserDisabled()` so it does not resend the same state.
 
 Login already in a party whose members are offline counts as no online partner → XP stays off until someone comes online.
+
+## Windfury sound
+
+The panel has an edit box for the Windfury sound path (Enter or click away to save) and a **Test** button. Drop your own `.wav` or `.mp3` under the addon folder and paste the path there. Extra hits within 0.15s share one sound.
 
 ## Panel
 
