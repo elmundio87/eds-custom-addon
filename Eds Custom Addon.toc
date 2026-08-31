@@ -1,0 +1,12 @@
+## Interface: 30300
+## Title: Eds Custom Addon
+## Notes: Multifunctional UI/automation for private AzerothCore
+## Author: Ed
+## Version: 0.1.0
+## SavedVariablesPerCharacter: EdsCustomAddonDB
+
+Core\Util.lua
+Core\Config.lua
+Core\Core.lua
+Core\UI.lua
+Modules\PartyXP\PartyXP.lua

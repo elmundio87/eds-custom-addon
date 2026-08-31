@@ -1,0 +1,73 @@
+# Eds Custom Addon
+
+WotLK 3.3.5a (`Interface: 30300`) addon for a private AzerothCore / ChromieCraft realm. Modular UI and automation; first module auto-toggles XP so you only gain it in a party or raid with at least one other **online** member.
+
+## Commands
+
+| Command | Effect |
+|---------|--------|
+| `/eca` / `/eca help` | List commands |
+| `/eca ui` | Toggle the feature panel |
+| `/eca partyxp on` | Enable auto XP toggle (default) |
+| `/eca partyxp off` | Stop auto toggling (does not change current XP flag) |
+| `/eca partyxp status` | Module on/off, group kind, desired XP vs server flag |
+| `/eca debug` | Toggle debug prints |
+
+## Party XP
+
+XP is turned **on** only when you are in a party or raid and at least one other member is online (`UnitIsConnected`). Solo, an empty party shell, or every other member offline → `.xp off`.
+
+The addon talks to the server with `SendChatMessage(".xp on", "SAY")` / `SendChatMessage(".xp off", "SAY")`. It compares against `IsXPUserDisabled()` so it does not resend the same state.
+
+Login already in a party whose members are offline counts as no online partner → XP stays off until someone comes online.
+
+## Panel
+
+`/eca ui` opens a small draggable panel (Esc to close). Each registered module gets a checkbox; **Debug** is on the same panel. Position is saved per character. There is no minimap button yet.
+
+## Layout
+
+```
+Eds Custom Addon.toc    # name matches the folder (required by the client)
+Core/                   # bootstrap, config, /eca
+Modules/PartyXP/        # first feature
+docs/api/               # 3.3.5 event/roster/command cache
+.cursor/skills/         # project skills for later modules
+```
+
+## Make
+
+```
+make setup      # pip install lupa + validate TOC
+make validate
+make lint       # syntax + 3.3.5 API lint + mocked unit tests
+make test       # same as lint
+make package    # dist/EdsCustomAddon.zip (game files only)
+make clean
+make run        # print in-game command reminder
+```
+
+Without GNU Make:
+
+```
+python -m pip install -r scripts/requirements-dev.txt
+python scripts/check.py
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tasks.ps1 -Task validate
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tasks.ps1 -Task package
+```
+
+CI runs `python scripts/check.py` on every push/PR to `main` (GitHub Actions). Tests load the real Lua files against a stub 3.3.5 API; they do not need the WoW client.
+
+## In-game checks
+
+1. Solo login → `.xp off` (status: `wantXP=off`, `serverXP=off`).
+2. Join a party with an online member → `.xp on`.
+3. That member goes offline → `.xp off`.
+4. Login already in a party, others offline → `.xp off` after `PLAYER_ENTERING_WORLD`.
+5. Raid with one other online member → `.xp on`.
+6. `/eca partyxp off` → no further auto toggle.
+7. `/reload` → no extra `.xp` if the flag already matches.
+
+## Adding a module
+
+See `.cursor/skills/wow-addon-structure/`. Register a table `{ name, title, tooltip, Init, Enable, Disable, OnEvent, Slash }` and append the Lua file to the TOC. It shows up on `/eca ui` automatically.
