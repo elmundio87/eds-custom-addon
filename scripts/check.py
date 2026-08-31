@@ -17,6 +17,14 @@ BANNED = [
     (r'SendChatMessage\s*\(\s*"/xp', "Server XP commands use a dot prefix, not /xp"),
 ]
 
+def lua_file(rel: str) -> Path:
+    return ROOT.joinpath(*rel.replace("\\", "/").split("/"))
+
+
+def posix(path: Path) -> str:
+    return path.resolve().as_posix()
+
+
 failures = 0
 
 
@@ -70,7 +78,7 @@ def lint_toc() -> None:
         fail(f"TOC load order {files} != {expected}")
 
     for rel in files:
-        path = ROOT / rel.replace("/", "\\")
+        path = lua_file(rel)
         if path.exists():
             ok(f"exists {rel}")
         else:
@@ -80,7 +88,7 @@ def lint_toc() -> None:
 def lint_lua_static() -> None:
     print("lint: static")
     for rel in toc_lua_files():
-        path = ROOT / rel.replace("/", "\\")
+        path = lua_file(rel)
         text = path.read_text(encoding="utf-8")
         if "\t" in text:
             fail(f"{rel} contains tabs")
@@ -106,7 +114,7 @@ def lint_lua_static() -> None:
 def lint_syntax(lua) -> None:
     print("lint: syntax")
     for rel in toc_lua_files():
-        path = str((ROOT / rel.replace("/", "\\")).resolve()).replace("\\", "/")
+        path = posix(lua_file(rel))
         try:
             lua.execute(f'assert(loadfile("{path}"))')
             ok(f"syntax {rel}")
@@ -115,10 +123,9 @@ def lint_syntax(lua) -> None:
 
 
 def load_addon(lua, env_path: Path) -> None:
-    lua.eval("dofile")(str(env_path.resolve()).replace("\\", "/"))
+    lua.eval("dofile")(posix(env_path))
     for rel in toc_lua_files():
-        path = str((ROOT / rel.replace("/", "\\")).resolve()).replace("\\", "/")
-        lua.eval("dofile")(path)
+        lua.eval("dofile")(posix(lua_file(rel)))
 
 
 def fire_loaded(lua) -> None:
