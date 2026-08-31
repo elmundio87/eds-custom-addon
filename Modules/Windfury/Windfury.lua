@@ -36,21 +36,29 @@ end
 function Windfury:Play()
     local path = self.addon.db.modules.Windfury.soundFile
     if path and path ~= "" then
+        addon:Debug("Windfury: PlaySoundFile " .. path)
         PlaySoundFile(path)
     else
+        addon:Debug("Windfury: PlaySound RaidWarning (no file)")
         PlaySound("RaidWarning")
     end
 end
 
 function Windfury:OnProc()
     if not self.enabled then
+        addon:Debug("Windfury: proc ignored (module off)")
         return
     end
     local now = GetTime()
     if self.lastPlay and (now - self.lastPlay) < PROC_GAP then
+        addon:Debug(string.format(
+            "Windfury: sound skipped (throttled dt=%.3f)",
+            now - self.lastPlay
+        ))
         return
     end
     self.lastPlay = now
+    addon:Debug("Windfury: proc -> play")
     self:Play()
 end
 
@@ -125,7 +133,18 @@ function Windfury:OnEvent(event, ...)
     if subevent ~= "SPELL_EXTRA_ATTACKS" and subevent ~= "SPELL_DAMAGE" then
         return
     end
-    if IsWindfury(spellId, spellName) then
+    local match = IsWindfury(spellId, spellName)
+    -- EXTRA_ATTACKS is rare; log even misses so a bad CLEU unpack is visible.
+    if subevent == "SPELL_EXTRA_ATTACKS" or match then
+        addon:Debug(string.format(
+            "Windfury: cleu sub=%s id=%s name=%s match=%s",
+            tostring(subevent),
+            tostring(spellId),
+            tostring(spellName),
+            match and "yes" or "no"
+        ))
+    end
+    if match then
         self:OnProc()
     end
 end
