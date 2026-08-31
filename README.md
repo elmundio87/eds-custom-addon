@@ -26,7 +26,7 @@ Login already in a party whose members are offline counts as no online partner â
 
 ## Windfury sound
 
-The panel has an edit box for the Windfury sound path (Enter or click away to save) and a **Test** button. Drop your own `.wav` or `.mp3` under the addon folder and paste the path there. Extra hits within 0.15s share one sound.
+The panel has an edit box for the Windfury sound path (Enter or click away to save) and a **Test** button. Drop your own `.wav` or `.mp3` under the addon folder and paste the path there. Extra hits within 0.15s share one sound. `/eca debug` traces CLEU match, throttle skips, and `PlaySoundFile` path.
 
 ## Panel
 

@@ -415,6 +415,12 @@ def test_addon(lua) -> None:
         ok("windfury test plays sound file")
     else:
         fail(f"windfury test sounds {sounds}")
+    prints = last_prints(lua)
+    joined = " ".join(prints)
+    if "PlaySoundFile" in joined:
+        ok("windfury test debug-logs PlaySoundFile")
+    else:
+        fail(f"windfury test debug prints {prints}")
 
     wow.resetChat()
     me = lua.eval("wow.state.playerGUID")
@@ -439,6 +445,12 @@ def test_addon(lua) -> None:
         ok("player Windfury EXTRA_ATTACKS plays once")
     else:
         fail(f"WF proc sounds {sounds}")
+    prints = last_prints(lua)
+    joined = " ".join(prints)
+    if "cleu sub=SPELL_EXTRA_ATTACKS" in joined and "match=yes" in joined and "proc -> play" in joined:
+        ok("windfury proc debug-logs cleu match and play")
+    else:
+        fail(f"WF proc debug prints {prints}")
 
     wow.resetChat()
     addon.OnEvent(
@@ -462,6 +474,12 @@ def test_addon(lua) -> None:
         ok("Windfury proc is throttled")
     else:
         fail(f"throttled WF still played {sounds}")
+    prints = last_prints(lua)
+    joined = " ".join(prints)
+    if "throttled" in joined:
+        ok("windfury throttle debug-logs skip")
+    else:
+        fail(f"throttled WF debug prints {prints}")
 
     wow.resetChat()
     lua.eval("wow.time")  # keep lupa warm
@@ -487,6 +505,11 @@ def test_addon(lua) -> None:
         ok("other player's Windfury does not play")
     else:
         fail(f"other WF played {sounds}")
+    prints = last_prints(lua)
+    if not any("Windfury:" in p for p in prints):
+        ok("other player's Windfury does not debug-log")
+    else:
+        fail(f"other WF debug prints {prints}")
 
     wow.resetChat()
     lua.execute("wow.time = wow.time + 1")
