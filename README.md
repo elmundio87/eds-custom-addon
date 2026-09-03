@@ -18,6 +18,10 @@ WotLK 3.3.5a (`Interface: 30300`) addon for a private AzerothCore / ChromieCraft
 | `/eca windfury test` | Play the Windfury proc sound |
 | `/eca windfury on` / `/eca windfury off` | Enable or disable Windfury sound |
 | `/eca windfury sound <path>` | Set a custom `.wav`/`.mp3` (addon folder or `Sound\\...`) |
+| `/eca bgsync` | Set other BG scoreboard players to your level and whisper autogear |
+| `/eca bgsync cancel` | Abort a running BG sync |
+| `/eca bgsync status` | Show idle/active progress and delays |
+| `/eca bgsync on` / `/eca bgsync off` | Enable or disable the BG sync module |
 | `/eca debug` | Toggle debug prints |
 
 ## Party XP
@@ -32,9 +36,13 @@ The addon talks to the server with `addon:SendServerCommand` using `.xp enable` 
 
 Login already in a party whose members are offline counts as no online partner → XP stays off until someone comes online.
 
+## BG Bot Sync
+
+While inside a battleground, `/eca bgsync` reads the scoreboard, excludes you and anyone on your in-game friends list, then for each remaining name sends `.character level <name> <your level>` (GM, whisper-to-self) and whispers `autogear`. Commands are paced (~0.4s) with a short settle between the level pass and autogear. A second sync while one is running is refused; leaving the BG or world cancels the queue. Per-bot lines need `/eca debug`. Needs GM access to `.character level`. Tune `stepDelay` / `settleDelay` under `EdsCustomAddonDB.modules.BGSync`. Dropping level can unequip items above the new requirement.
+
 ## Windfury proc
 
-When Windfury Weapon is missing, a **RECAST WINDFURY** badge appears (dual-wield checks both hands; two-handers only main hand; ignored while holding a fishing pole). With Windfury active, scrolling combat text warns **1 minute before expiry**. Enable **Move RECAST WINDFURY badge** on `/eca ui` to drag it; position saves per character. Font size on the panel adjusts badge text (8–32).
+When a shaman weapon imbue is missing, a recast badge appears for **that hand's last imbue** (Windfury, Flametongue, Frostbrand, Rockbiter, or Earthliving). Dual-wield WF+FT is fine: each hand is tracked separately. **Click the badge** to recast via a secure action button (main hand first if both are down). If the badge first appears **during combat**, click-to-recast waits until you leave combat (Blizzard lockdown); a badge already up when combat starts still casts. With an imbue active, scrolling combat text warns **1 minute before expiry** using that imbue's name. Enable **Move RECAST WINDFURY badge** on `/eca ui` to drag it (toggle out of combat; clicks do not recast while moving). Font size on the panel adjusts badge text (8–32).
 
 The panel has **Test proc** (random shuffle + combat text; pick **Default**, **Low HP**, or **Kill** pool beside the button), a scrollable sound name list (click to select), and **Test sound** to preview the selection. An optional sound path is used only when `Sounds/` has no `.wav`/`.mp3`.
 
@@ -55,7 +63,9 @@ Each pool shuffles independently (queue size is `pool size - 1`, capped at 10). 
 ```
 Eds Custom Addon.toc    # name matches the folder (required by the client)
 Core/                   # bootstrap, config, /eca
-Modules/PartyXP/        # first feature
+Modules/PartyXP/        # party XP toggle
+Modules/Windfury/       # Windfury proc sounds / alerts
+Modules/BGSync/         # battleground GM level + autogear
 docs/api/               # 3.3.5 event/roster/command cache
 .cursor/skills/         # project skills for later modules
 ```

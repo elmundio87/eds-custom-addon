@@ -17,6 +17,7 @@ BANNED = [
     (r"\bGetNumGroupMembers\s*\(", "GetNumGroupMembers is MoP+"),
     (r"\bGROUP_ROSTER_UPDATE\b", "GROUP_ROSTER_UPDATE is MoP+"),
     (r"\bC_Timer\.", "C_Timer is not in 3.3.5"),
+    (r"\bC_FriendList\.", "C_FriendList is not in 3.3.5; use GetNumFriends/GetFriendInfo"),
     (r'SendChatMessage\s*\(\s*"/xp', "Server XP commands use a dot prefix, not /xp"),
 ]
 
@@ -142,6 +143,7 @@ def lint_toc() -> None:
         "Modules/PartyXP/PartyXP.lua",
         "Sounds/manifest.lua",
         "Modules/Windfury/Windfury.lua",
+        "Modules/BGSync/BGSync.lua",
     ]
     if files == expected:
         ok("TOC load order")
@@ -185,6 +187,11 @@ def lint_lua_static() -> None:
         ok("Windfury registers itself")
     else:
         fail("Windfury.lua does not call RegisterModule")
+    bgsync = (ROOT / "Modules" / "BGSync" / "BGSync.lua").read_text(encoding="utf-8")
+    if "RegisterModule" in bgsync:
+        ok("BGSync registers itself")
+    else:
+        fail("BGSync.lua does not call RegisterModule")
 
 
 def lint_syntax(lua) -> None:
@@ -228,9 +235,37 @@ def last_sent_types(lua) -> list[str]:
     return out
 
 
+def last_sent_entries(lua) -> list[dict]:
+    sent = lua.eval("wow.sent")
+    out = []
+    for i in range(1, len(sent) + 1):
+        item = sent[i]
+        out.append({
+            "msg": getattr(item, "msg", None),
+            "chatType": getattr(item, "chatType", None),
+            "target": getattr(item, "target", None),
+        })
+    return out
+
+
+def set_battleground(lua, names: list[str], level: int = 41) -> None:
+    wow = lua.eval("wow")
+    wow.setBattleground(lua.table_from(names), level)
+
+
+def set_friends(lua, names: list[str]) -> None:
+    wow = lua.eval("wow")
+    wow.setFriends(lua.table_from(names))
+
+
 def last_sounds(lua) -> list[str]:
     sounds = lua.eval("wow.sounds")
     return [sounds[i] for i in range(1, len(sounds) + 1)]
+
+
+def last_casts(lua) -> list[str]:
+    casts = lua.eval("wow.casts")
+    return [casts[i] for i in range(1, len(casts) + 1)]
 
 
 def last_prints(lua) -> list[str]:
@@ -1575,10 +1610,181 @@ def test_addon(lua) -> None:
     """)
     wf.UpdateAlert(wf)
     alert = lua.eval("ECA_WindfuryAlert")
-    if alert and alert.shown:
-        ok("WF alert shows when main hand has wrong imbue")
+    if alert and not alert.shown:
+        ok("WF alert hidden when main hand has Flametongue")
     else:
-        fail(f"WF alert hidden with wrong imbue {alert}")
+        fail(f"WF alert shown with Flametongue {alert}")
+    remembered = lua.eval(
+        'EdsCustomAddon.db.modules.Windfury.slotImbue.main'
+    )
+    if remembered == "flametongue":
+        ok("WF remembers Flametongue on main hand")
+    else:
+        fail(f"slotImbue.main {remembered}")
+
+    wow.resetInventory()
+    lua.execute("""
+        local wf = EdsCustomAddon:GetModule("Windfury")
+        wf:GetSlotImbueDb().main = "windfury"
+        wf:GetSlotImbueDb().off = "windfury"
+        wow.state.weaponEnchants.main = true
+        wow.state.weaponEnchants.mainExp = 1800000
+        wow.setInventorySlot(16, {
+            link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
+            name = "Axe",
+            itemType = "Weapon",
+            subType = "Axe",
+            equipLoc = "INVTYPE_WEAPON",
+            enchantText = "Rockbiter IV",
+        })
+    """)
+    wf.UpdateAlert(wf)
+    alert = lua.eval("ECA_WindfuryAlert")
+    if alert and not alert.shown:
+        ok("WF alert hidden when main hand has Rockbiter")
+    else:
+        fail(f"WF alert shown with Rockbiter {alert}")
+
+    wow.resetInventory()
+    lua.execute("""
+        local wf = EdsCustomAddon:GetModule("Windfury")
+        wow.state.weaponEnchants.main = true
+        wow.state.weaponEnchants.off = true
+        wow.state.weaponEnchants.mainExp = 1800000
+        wow.state.weaponEnchants.offExp = 1800000
+        wow.setInventorySlot(16, {
+            link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
+            name = "Axe",
+            itemType = "Weapon",
+            subType = "Axe",
+            equipLoc = "INVTYPE_WEAPON",
+            enchantText = "Windfury VIII",
+        })
+        wow.setInventorySlot(17, {
+            link = "|cff9d9d9d|Hitem:17:0:0:0:0:0:0:0|h[Mace]|h|r",
+            name = "Mace",
+            itemType = "Weapon",
+            subType = "Mace",
+            equipLoc = "INVTYPE_WEAPON",
+            enchantText = "Flametongue IX",
+        })
+        wf:UpdateAlert()
+    """)
+    alert = lua.eval("ECA_WindfuryAlert")
+    if alert and not alert.shown:
+        ok("WF alert hidden for Windfury main and Flametongue off")
+    else:
+        fail(f"WF alert shown for WF+FT {alert}")
+
+    wow.resetInventory()
+    lua.execute("""
+        local wf = EdsCustomAddon:GetModule("Windfury")
+        wf.lastZoneLoad = GetTime() - 5
+        wf:GetSlotImbueDb().main = "windfury"
+        wf:GetSlotImbueDb().off = "flametongue"
+        wow.setInventorySlot(16, {
+            link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
+            name = "Axe",
+            itemType = "Weapon",
+            subType = "Axe",
+            equipLoc = "INVTYPE_WEAPON",
+        })
+        wow.setInventorySlot(17, {
+            link = "|cff9d9d9d|Hitem:17:0:0:0:0:0:0:0|h[Mace]|h|r",
+            name = "Mace",
+            itemType = "Weapon",
+            subType = "Mace",
+            equipLoc = "INVTYPE_WEAPON",
+            enchantText = "Flametongue IX",
+        })
+        wf:UpdateAlert()
+    """)
+    alert = lua.eval("ECA_WindfuryAlert")
+    label = lua.eval("ECA_WindfuryAlert and ECA_WindfuryAlert.label:GetText()")
+    if alert and alert.shown and label == "RECAST WINDFURY":
+        ok("WF alert recasts Windfury only when off hand still has Flametongue")
+    else:
+        fail(f"mixed missing alert shown={getattr(alert, 'shown', None)} label={label}")
+    wow.resetChat()
+    lua.execute("ECA_WindfuryAlertCast:Click()")
+    casts = last_casts(lua)
+    if casts == ["Windfury Weapon"]:
+        ok("WF alert click casts remembered main-hand imbue")
+    else:
+        fail(f"alert click casts {casts}")
+
+    wow.resetInventory()
+    lua.execute("""
+        local wf = EdsCustomAddon:GetModule("Windfury")
+        wf.lastZoneLoad = GetTime() - 5
+        wf:GetSlotImbueDb().main = "windfury"
+        wf:GetSlotImbueDb().off = "flametongue"
+        wow.setInventorySlot(16, {
+            link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
+            name = "Axe",
+            itemType = "Weapon",
+            subType = "Axe",
+            equipLoc = "INVTYPE_WEAPON",
+        })
+        wow.setInventorySlot(17, {
+            link = "|cff9d9d9d|Hitem:17:0:0:0:0:0:0:0|h[Mace]|h|r",
+            name = "Mace",
+            itemType = "Weapon",
+            subType = "Mace",
+            equipLoc = "INVTYPE_WEAPON",
+        })
+        wf:UpdateAlert()
+    """)
+    label = lua.eval("ECA_WindfuryAlert.label:GetText()")
+    if label == "RECAST WINDFURY":
+        ok("WF alert prefers main-hand recast when both imbues missing")
+    else:
+        fail(f"both-missing mixed label {label}")
+    wow.resetChat()
+    lua.execute("ECA_WindfuryAlertCast:Click()")
+    casts = last_casts(lua)
+    if casts == ["Windfury Weapon"]:
+        ok("WF alert click casts main-hand spell first when both missing")
+    else:
+        fail(f"both-missing click casts {casts}")
+
+    wow.resetInventory()
+    wow.resetChat()
+    lua.execute("""
+        local wf = EdsCustomAddon:GetModule("Windfury")
+        wf.lastZoneLoad = GetTime() - 5
+        wf.expiryWarned = {}
+        wf.lastRemaining = {}
+        wow.setInventorySlot(16, {
+            link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
+            name = "Axe",
+            itemType = "Weapon",
+            subType = "Axe",
+            equipLoc = "INVTYPE_WEAPON",
+            enchantText = "Windfury VIII",
+            enchantExpirationMs = 1800000,
+        })
+        wow.setInventorySlot(17, {
+            link = "|cff9d9d9d|Hitem:17:0:0:0:0:0:0:0|h[Mace]|h|r",
+            name = "Mace",
+            itemType = "Weapon",
+            subType = "Mace",
+            equipLoc = "INVTYPE_WEAPON",
+            enchantText = "Flametongue IX",
+            enchantExpirationMs = 45000,
+        })
+        wf:CheckEnchantExpiry()
+    """)
+    combat = last_combat_text(lua)
+    if combat and combat[-1]["msg"] == "RECAST FLAMETONGUE (off hand)":
+        ok("WF expiry uses Flametongue text for off-hand imbue")
+    else:
+        fail(f"FT expiry combat text {combat}")
+
+    lua.execute("""
+        EdsCustomAddon.db.modules.Windfury.slotImbue.main = "windfury"
+        EdsCustomAddon.db.modules.Windfury.slotImbue.off = "windfury"
+    """)
 
     wow.resetInventory()
     lua.execute("""
@@ -1770,6 +1976,12 @@ def test_addon(lua) -> None:
         ok("WF alert visible in move mode even with Windfury active")
     else:
         fail("WF alert not shown for reposition mode")
+    cast_shown = lua.eval("ECA_WindfuryAlertCast and ECA_WindfuryAlertCast.shown")
+    cast_type = lua.eval('ECA_WindfuryAlertCast and ECA_WindfuryAlertCast:GetAttribute("type")')
+    if not cast_shown and not cast_type:
+        ok("WF cast overlay hidden in move mode")
+    else:
+        fail(f"cast overlay in move mode shown={cast_shown} type={cast_type}")
 
     lua.execute("""
         local wf = EdsCustomAddon:GetModule("Windfury")
@@ -1791,6 +2003,7 @@ def test_addon(lua) -> None:
     else:
         fail("WF alert still shown after move mode off")
 
+    wow.resetChat()
     lua.execute("""
         local wf = EdsCustomAddon:GetModule("Windfury")
         wf.expiryWarned = {}
@@ -2134,6 +2347,224 @@ def test_addon(lua) -> None:
     else:
         fail(f"unknown command prints {prints}")
 
+    # --- BGSync ---
+    bg = addon.GetModule(addon, "BGSync")
+    if bg is None:
+        fail("BGSync not registered")
+    else:
+        ok("BGSync registered")
+        if bg.enabled:
+            ok("BGSync enabled by default")
+        else:
+            fail("BGSync should default to enabled")
+
+        addon.db.modules.BGSync.stepDelay = 0.1
+        addon.db.modules.BGSync.settleDelay = 0.2
+
+        wow.resetChat()
+        wow.resetBattleground()
+        bg.Start(bg)
+        prints = last_prints(lua)
+        sent = last_sent(lua)
+        if any("not currently in a battleground" in p for p in prints) and sent == []:
+            ok("BGSync rejects outside battleground")
+        else:
+            fail(f"outside BG prints={prints} sent={sent}")
+
+        wow.resetChat()
+        set_battleground(
+            lua,
+            ["Ed", "Bob", "Bob-Realm", "Steve-ChromieCraft", "Ed-Realm"],
+            41,
+        )
+        bg.Start(bg)
+        if wow.state.bgScoreRequests == 1:
+            ok("BGSync requests battlefield score data")
+        else:
+            fail(f"bgScoreRequests={wow.state.bgScoreRequests}")
+        prints = last_prints(lua)
+        if any("Reading battleground roster" in p for p in prints):
+            ok("BGSync prints reading roster")
+        else:
+            fail(f"roster start prints {prints}")
+
+        wow.resetChat()
+        bg.Start(bg)
+        prints = last_prints(lua)
+        if any("already running" in p for p in prints):
+            ok("BGSync rejects concurrent start while awaiting scores")
+        else:
+            fail(f"concurrent awaiting prints {prints}")
+
+        wow.resetChat()
+        addon.OnEvent(addon, "UPDATE_BATTLEFIELD_SCORE")
+        prints = last_prints(lua)
+        if any("Found 2 other players" in p for p in prints):
+            ok("BGSync roster excludes self, strips realm, dedupes")
+        else:
+            fail(f"roster build prints {prints}")
+
+        for _ in range(80):
+            if not bg.active and not bg.awaitingScores:
+                break
+            wow.tick(0.15)
+        entries = last_sent_entries(lua)
+        msgs = [e["msg"] for e in entries]
+        levels = [m for m in msgs if m and m.startswith(".character level ")]
+        gears = [e for e in entries if e["msg"] == "autogear"]
+        if levels == [
+            ".character level Bob 41",
+            ".character level Steve 41",
+        ]:
+            ok("BGSync sends character level commands in roster order")
+        else:
+            fail(f"level commands {levels}")
+        if [e["target"] for e in gears] == ["Bob", "Steve"] and all(
+            e["chatType"] == "WHISPER" for e in gears
+        ):
+            ok("BGSync whispers autogear after settle")
+        else:
+            fail(f"autogear entries {gears}")
+        first_gear = next((i for i, m in enumerate(msgs) if m == "autogear"), -1)
+        last_level = max(
+            (i for i, m in enumerate(msgs) if m and m.startswith(".character level")),
+            default=-1,
+        )
+        if first_gear > last_level >= 0:
+            ok("BGSync runs all level commands before autogear phase")
+        else:
+            fail(f"phase order msgs={msgs}")
+        prints = last_prints(lua)
+        if any("Complete. Processed 2 characters at level 41" in p for p in prints):
+            ok("BGSync prints completion with captured level")
+        else:
+            fail(f"completion prints {prints}")
+        if not bg.active and not bg.awaitingScores:
+            ok("BGSync idle after completion")
+        else:
+            fail("BGSync still active after completion")
+
+        wow.resetChat()
+        set_battleground(lua, ["Ed", "Bob", "Steve"], 41)
+        set_friends(lua, ["Bob"])
+        bg.Start(bg)
+        addon.OnEvent(addon, "UPDATE_BATTLEFIELD_SCORE")
+        prints = last_prints(lua)
+        if any("Found 1 other players (1 friend skipped)" in p for p in prints):
+            ok("BGSync reports friends skipped")
+        else:
+            fail(f"friends skip prints {prints}")
+        for _ in range(80):
+            if not bg.active and not bg.awaitingScores:
+                break
+            wow.tick(0.15)
+        entries = last_sent_entries(lua)
+        levels = [e["msg"] for e in entries if e["msg"] and e["msg"].startswith(".character level")]
+        gears = [e for e in entries if e["msg"] == "autogear"]
+        if levels == [".character level Steve 41"] and [e["target"] for e in gears] == ["Steve"]:
+            ok("BGSync excludes friends-list names")
+        else:
+            fail(f"friends exclusion levels={levels} gears={gears}")
+        set_friends(lua, [])
+
+        wow.resetChat()
+        set_battleground(lua, ["Ed", "Alice"], 41)
+        bg.active = True
+        bg.awaitingScores = False
+        bg.phase = None
+        bg.queue = lua.table_from(["Alice"])
+        bg.index = 1
+        bg.level = 41
+        bg.ProcessQueue(bg, bg.runId)
+        sent = last_sent(lua)
+        if sent == [] and bg.active:
+            ok("BGSync nil phase does not send or finish")
+        else:
+            fail(f"nil phase sent={sent} active={bg.active}")
+        bg.index = 2
+        wow.resetChat()
+        bg.ProcessQueue(bg, bg.runId)
+        prints = last_prints(lua)
+        sent = last_sent(lua)
+        if sent == [] and bg.active and not any("Complete." in p for p in prints):
+            ok("BGSync nil phase past end does not Finish")
+        else:
+            fail(f"nil phase end sent={sent} prints={prints} active={bg.active}")
+        bg.Cancel(bg, "test")
+        wow.resetChat()
+
+        wow.resetChat()
+        set_battleground(lua, ["Ed", "Alice", "Bob"], 41)
+        bg.Start(bg)
+        addon.OnEvent(addon, "UPDATE_BATTLEFIELD_SCORE")
+        wow.tick(0.15)
+        wow.resetChat()
+        bg.Start(bg)
+        prints = last_prints(lua)
+        if any("already running" in p for p in prints):
+            ok("BGSync rejects concurrent start while processing")
+        else:
+            fail(f"concurrent processing prints {prints}")
+        for _ in range(80):
+            if not bg.active and not bg.awaitingScores:
+                break
+            wow.tick(0.15)
+
+        wow.resetChat()
+        set_battleground(lua, ["Ed", "Alice", "Bob", "Carol"], 41)
+        bg.Start(bg)
+        addon.OnEvent(addon, "UPDATE_BATTLEFIELD_SCORE")
+        wow.tick(0.15)
+        sent_before = last_sent(lua)
+        addon.OnEvent(addon, "PLAYER_LEAVING_WORLD")
+        wow.resetChat()
+        for _ in range(40):
+            wow.tick(0.15)
+        sent_after = last_sent(lua)
+        if len(sent_before) == 1 and sent_before[0].startswith(".character level"):
+            ok("BGSync sent one level command before leave")
+        else:
+            fail(f"before leave sent {sent_before}")
+        if sent_after == [] and not bg.active:
+            ok("BGSync cancels queue on PLAYER_LEAVING_WORLD")
+        else:
+            fail(f"after leave sent={sent_after} active={bg.active}")
+
+        wow.resetChat()
+        names = ["Ed"] + [f"Bot{i}" for i in range(1, 40)]
+        set_battleground(lua, names, 41)
+        addon.db.modules.BGSync.stepDelay = 0.05
+        addon.db.modules.BGSync.settleDelay = 0.1
+        bg.Start(bg)
+        addon.OnEvent(addon, "UPDATE_BATTLEFIELD_SCORE")
+        for _ in range(500):
+            if not bg.active and not bg.awaitingScores:
+                break
+            wow.tick(0.06)
+        entries = last_sent_entries(lua)
+        levels = [e["msg"] for e in entries if e["msg"] and e["msg"].startswith(".character level")]
+        gears = [e for e in entries if e["msg"] == "autogear"]
+        if len(levels) == 39 and len(gears) == 39:
+            ok("BGSync drains full 40-player roster (39 level + 39 autogear)")
+        else:
+            fail(f"full BG levels={len(levels)} gears={len(gears)} active={bg.active}")
+        if all(e["chatType"] == "WHISPER" for e in gears):
+            ok("BGSync full-roster autogears are WHISPER")
+        else:
+            fail("full-roster autogear chat types wrong")
+
+        wow.resetChat()
+        wow.resetBattleground()
+        addon.SlashHandler(addon, "bgsync status")
+        prints = last_prints(lua)
+        if prints and "idle" in prints[-1]:
+            ok("BGSync status slash works")
+        else:
+            fail(f"bgsync status prints {prints}")
+
+        addon.db.modules.BGSync.stepDelay = 0.4
+        addon.db.modules.BGSync.settleDelay = 1.0
+
     # Wrong ADDON_LOADED name is ignored after first load (already loaded).
     # Fresh check: config merge keeps user debug=true and fills ui defaults.
     lua.execute("EdsCustomAddonDB = { debug = true, modules = { PartyXP = { enabled = false } } }")
@@ -2141,7 +2572,6 @@ def test_addon(lua) -> None:
     lua.execute("EdsCustomAddon.ui = nil")
     lua.execute("EdsCustomAddon.modules = {}")
     lua.execute("EdsCustomAddon.moduleOrder = {}")
-    # Re-register by reloading PartyXP only would duplicate; instead call LoadConfig.
     addon.LoadConfig(addon)
     db = lua.eval("EdsCustomAddonDB")
     if db.debug:
@@ -2156,6 +2586,10 @@ def test_addon(lua) -> None:
         ok("config merge keeps PartyXP.enabled=false")
     else:
         fail("config merge overwrote PartyXP.enabled")
+    if db.modules.BGSync is not None and db.modules.BGSync.enabled:
+        ok("config merge fills BGSync defaults")
+    else:
+        fail("config merge missing BGSync defaults")
 
 
 def main() -> int:

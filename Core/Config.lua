@@ -21,6 +21,10 @@ addon.defaults = {
             enabled = true,
             soundFile = "Sound\\Interface\\RaidWarning.wav",
             alertMove = false,
+            slotImbue = {
+                main = "windfury",
+                off = "windfury",
+            },
             alert = {
                 point = "TOPRIGHT",
                 relativePoint = "TOPRIGHT",
@@ -28,6 +32,11 @@ addon.defaults = {
                 y = -132,
                 fontSize = 12,
             },
+        },
+        BGSync = {
+            enabled = true,
+            stepDelay = 0.4,
+            settleDelay = 1.0,
         },
     },
 }

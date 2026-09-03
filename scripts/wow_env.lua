@@ -6,6 +6,7 @@ wow = {
     prints = {},
     sounds = {},
     combatText = {},
+    casts = {},
     specialFrames = {},
     state = {
         raidCount = 0,
@@ -22,6 +23,12 @@ wow = {
         targetGUID = nil,
         targetHealth = 0,
         targetHealthMax = 0,
+        playerLevel = 80,
+        instanceType = "none",
+        bgScores = {},
+        bgScoreRequests = 0,
+        friends = {},
+        inCombat = false,
     },
 }
 
@@ -86,12 +93,48 @@ function Frame:SetClampedToScreen() end
 function Frame:SetMovable() end
 function Frame:EnableMouse() end
 function Frame:RegisterForDrag() end
+function Frame:RegisterForClicks() end
 function Frame:StartMoving() end
 function Frame:StopMovingOrSizing() end
 function Frame:SetBackdrop() end
 function Frame:SetBackdropColor() end
 function Frame:SetBackdropBorderColor() end
 function Frame:ClearAllPoints() end
+function Frame:SetFrameLevel(level)
+    self.frameLevel = level or 1
+end
+function Frame:GetFrameLevel()
+    return self.frameLevel or 1
+end
+function Frame:SetAllPoints(relative)
+    self.allPoints = relative
+    if relative then
+        self.width = relative.width or self.width
+        self.height = relative.height or self.height
+    end
+end
+function Frame:SetAttribute(key, value)
+    if not self.attributes then
+        self.attributes = {}
+    end
+    self.attributes[key] = value
+end
+function Frame:GetAttribute(key)
+    if not self.attributes then
+        return nil
+    end
+    return self.attributes[key]
+end
+function Frame:Click()
+    local attrs = self.attributes
+    if attrs and attrs.type == "spell" and attrs.spell then
+        CastSpellByName(attrs.spell)
+        return
+    end
+    if self.scripts.OnClick then
+        self.scripts.OnClick(self)
+    end
+end
 function Frame:SetScrollChild(child)
     self.scrollChild = child
     if child then
@@ -193,6 +236,75 @@ function UnitName(unit)
         return wow.state.playerName
     end
     return unit
+end
+
+function UnitLevel(unit)
+    if unit == "player" then
+        return wow.state.playerLevel or 1
+    end
+    return 1
+end
+
+function InCombatLockdown()
+    return wow.state.inCombat and 1 or nil
+end
+
+function IsInInstance()
+    local kind = wow.state.instanceType or "none"
+    if kind == "none" or kind == "" then
+        return nil, "none"
+    end
+    return 1, kind
+end
+
+function RequestBattlefieldScoreData()
+    wow.state.bgScoreRequests = (wow.state.bgScoreRequests or 0) + 1
+end
+
+function GetNumBattlefieldScores()
+    local scores = wow.state.bgScores
+    if type(scores) ~= "table" then
+        return 0
+    end
+    return #scores
+end
+
+function GetBattlefieldScore(index)
+    local scores = wow.state.bgScores
+    if type(scores) ~= "table" then
+        return nil
+    end
+    local entry = scores[index]
+    if not entry then
+        return nil
+    end
+    if type(entry) == "string" then
+        return entry
+    end
+    return entry.name
+end
+
+function GetNumFriends()
+    local friends = wow.state.friends
+    if type(friends) ~= "table" then
+        return 0
+    end
+    return #friends
+end
+
+function GetFriendInfo(index)
+    local friends = wow.state.friends
+    if type(friends) ~= "table" then
+        return nil
+    end
+    local entry = friends[index]
+    if not entry then
+        return nil
+    end
+    if type(entry) == "string" then
+        return entry
+    end
+    return entry.name
 end
 
 function UnitGUID(unit)
@@ -323,6 +435,10 @@ end
 
 function PlaySound(name)
     table.insert(wow.sounds, name)
+end
+
+function CastSpellByName(name)
+    table.insert(wow.casts, name)
 end
 
 COMBAT_TEXT_SCROLL_FUNCTION = function() end
@@ -476,6 +592,7 @@ function wow.resetChat()
     wow.prints = {}
     wow.sounds = {}
     wow.combatText = {}
+    wow.casts = {}
     COMBAT_TEXT_TO_ANIMATE = {}
     wow.state.targetGUID = nil
     wow.state.targetHealth = 0
@@ -493,7 +610,7 @@ end
 
 function wow.setInventorySlot(slot, item)
     wow.state.inventory[slot] = item
-    if item and item.enchantText and item.enchantText:find("Windfury") then
+    if item and item.enchantText and item.enchantText ~= "" then
         local expMs = item.enchantExpirationMs or 1800000
         if slot == 16 then
             wow.state.weaponEnchants.main = true
@@ -540,4 +657,37 @@ function wow.setRaidWithPartner(partnerOnline)
         raid2 = partnerOnline and true or false,
     }
     wow.state.isPlayer = { raid1 = true }
+end
+
+function wow.resetBattleground()
+    wow.state.instanceType = "none"
+    wow.state.bgScores = {}
+    wow.state.bgScoreRequests = 0
+    wow.state.playerLevel = 80
+    wow.state.friends = {}
+end
+
+function wow.setBattleground(names, level)
+    wow.state.instanceType = "pvp"
+    local scores = {}
+    if type(names) == "table" then
+        for i, name in ipairs(names) do
+            scores[i] = name
+        end
+    end
+    wow.state.bgScores = scores
+    wow.state.bgScoreRequests = 0
+    if level then
+        wow.state.playerLevel = level
+    end
+end
+
+function wow.setFriends(names)
+    local friends = {}
+    if type(names) == "table" then
+        for i, name in ipairs(names) do
+            friends[i] = name
+        end
+    end
+    wow.state.friends = friends
 end

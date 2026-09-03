@@ -12,3 +12,4 @@ Core\UI.lua
 Modules\PartyXP\PartyXP.lua
 Sounds\manifest.lua
 Modules\Windfury\Windfury.lua
+Modules\BGSync\BGSync.lua

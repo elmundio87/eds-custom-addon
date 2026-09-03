@@ -32,12 +32,49 @@ local ALERT_TEXT = "RECAST WINDFURY"
 local EXPIRY_WARN_SECONDS = 60
 local EXPIRY_SCROLL_DISTANCE = 80
 local ENCHANT_LOAD_GRACE = 3
-local OTHER_IMBUE_PATTERNS = {
-    "Flametongue",
-    "Rockbiter",
-    "Frostbrand",
-    "Earthliving",
-    "Earthen",
+local IMBUE_ORDER = {
+    "windfury",
+    "flametongue",
+    "frostbrand",
+    "rockbiter",
+    "earthliving",
+}
+local IMBUES = {
+    windfury = {
+        patterns = { "Windfury" },
+        spell = "Windfury Weapon",
+        alert = "RECAST WINDFURY",
+        missing = "Windfury Weapon",
+    },
+    flametongue = {
+        patterns = { "Flametongue" },
+        spell = "Flametongue Weapon",
+        alert = "RECAST FLAMETONGUE",
+        missing = "Flametongue Weapon",
+    },
+    frostbrand = {
+        patterns = { "Frostbrand" },
+        spell = "Frostbrand Weapon",
+        alert = "RECAST FROSTBRAND",
+        missing = "Frostbrand Weapon",
+    },
+    rockbiter = {
+        patterns = { "Rockbiter" },
+        spell = "Rockbiter Weapon",
+        alert = "RECAST ROCKBITER",
+        missing = "Rockbiter Weapon",
+    },
+    earthliving = {
+        patterns = { "Earthliving", "Earthen" },
+        spell = "Earthliving Weapon",
+        alert = "RECAST EARTHLIVING",
+        missing = "Earthliving Weapon",
+    },
+}
+
+local SLOT_IMBUE_KEYS = {
+    [INVSLOT_MAINHAND] = "main",
+    [INVSLOT_OFFHAND] = "off",
 }
 
 local PROC_POOLS = { "default", "lowhp", "kill" }
@@ -61,7 +98,7 @@ end
 local Windfury = {
     name = "Windfury",
     title = "Windfury proc",
-    tooltip = "Play a random sound from Sounds/ on proc; shows RECAST WINDFURY when Windfury Weapon is missing",
+    tooltip = "Play a random sound from Sounds/ on Windfury proc; recast badge remembers each hand's last imbue",
 }
 
 local function IsWindfury(spellId, spellName)
@@ -117,15 +154,20 @@ local function ClassifyTooltipImbue(text)
     if not text or text == "" then
         return nil
     end
-    if text:find("Windfury") then
-        return "windfury"
-    end
-    for i = 1, #OTHER_IMBUE_PATTERNS do
-        if text:find(OTHER_IMBUE_PATTERNS[i]) then
-            return "other"
+    for i = 1, #IMBUE_ORDER do
+        local key = IMBUE_ORDER[i]
+        local spec = IMBUES[key]
+        for j = 1, #spec.patterns do
+            if text:find(spec.patterns[j]) then
+                return key
+            end
         end
     end
     return nil
+end
+
+local function ImbueSpec(kind)
+    return kind and IMBUES[kind] or nil
 end
 
 function Windfury:ScanSlotTooltipImbue(slot)
@@ -144,13 +186,9 @@ function Windfury:ScanSlotTooltipImbue(slot)
         local left = _G["ECA_WindfuryScanTooltipTextLeft" .. i]
         if left then
             local state = ClassifyTooltipImbue(left:GetText())
-            if state == "windfury" then
+            if state then
                 tip:Hide()
-                return "windfury", true
-            end
-            if state == "other" then
-                tip:Hide()
-                return "other", true
+                return state, true
             end
         end
     end
@@ -162,7 +200,47 @@ function Windfury:ScanSlotTooltipImbue(slot)
     return "none", true
 end
 
-function Windfury:SlotHasWindfury(slot)
+function Windfury:GetSlotImbueDb()
+    if not addon.db.modules.Windfury then
+        addon.db.modules.Windfury = {}
+    end
+    local entry = addon.db.modules.Windfury
+    if not entry.slotImbue then
+        entry.slotImbue = {
+            main = "windfury",
+            off = "windfury",
+        }
+    end
+    if not ImbueSpec(entry.slotImbue.main) then
+        entry.slotImbue.main = "windfury"
+    end
+    if not ImbueSpec(entry.slotImbue.off) then
+        entry.slotImbue.off = "windfury"
+    end
+    return entry.slotImbue
+end
+
+function Windfury:RememberSlotImbue(slot, kind)
+    if not ImbueSpec(kind) then
+        return
+    end
+    local dbKey = SLOT_IMBUE_KEYS[slot]
+    if not dbKey then
+        return
+    end
+    self:GetSlotImbueDb()[dbKey] = kind
+end
+
+function Windfury:GetRememberedImbue(slot)
+    local dbKey = SLOT_IMBUE_KEYS[slot] or "main"
+    local kind = self:GetSlotImbueDb()[dbKey]
+    if not ImbueSpec(kind) then
+        return "windfury"
+    end
+    return kind
+end
+
+function Windfury:SlotImbueKind(slot)
     local link = GetInventoryItemLink("player", slot)
     if not link then
         return nil
@@ -174,11 +252,9 @@ function Windfury:SlotHasWindfury(slot)
     end
 
     local imbue = self:ScanSlotTooltipImbue(slot)
-    if imbue == "windfury" then
-        return true
-    end
-    if imbue == "other" then
-        return false
+    if ImbueSpec(imbue) then
+        self:RememberSlotImbue(slot, imbue)
+        return imbue
     end
 
     local hasEnchant = false
@@ -202,9 +278,17 @@ function Windfury:SlotHasWindfury(slot)
     return false
 end
 
+function Windfury:SlotHasWindfury(slot)
+    local kind = self:SlotImbueKind(slot)
+    if kind == nil then
+        return nil
+    end
+    return kind == "windfury"
+end
+
 function Windfury:GetSlotEnchantRemaining(slot)
-    local state = self:SlotHasWindfury(slot)
-    if state ~= true then
+    local kind = self:SlotImbueKind(slot)
+    if type(kind) ~= "string" or not ImbueSpec(kind) then
         return nil
     end
     local hasMain, mainExp, _, hasOff, offExp = GetWeaponEnchantInfo()
@@ -239,6 +323,17 @@ function Windfury:GetWindfuryWeaponSlots()
     return slots
 end
 
+function Windfury:DescribeSlotImbue(slot)
+    local kind = self:SlotImbueKind(slot)
+    if kind == nil then
+        return "uncertain"
+    end
+    if type(kind) == "string" then
+        return "ok", kind
+    end
+    return "missing", self:GetRememberedImbue(slot)
+end
+
 function Windfury:GetWindfuryAlertState()
     if select(2, UnitClass("player")) ~= "SHAMAN" then
         return nil
@@ -250,50 +345,59 @@ function Windfury:GetWindfuryAlertState()
         return nil
     end
 
-    local missingMain = false
-    local missingOff = false
+    local mainStatus, mainKind = self:DescribeSlotImbue(INVSLOT_MAINHAND)
+    if mainStatus == "uncertain" then
+        return nil
+    end
 
-    if self:IsTwoHandWeapon(INVSLOT_MAINHAND) then
-        local mainState = self:SlotHasWindfury(INVSLOT_MAINHAND)
-        if mainState == nil then
+    local missingMain = mainStatus == "missing"
+    local missingOff = false
+    local offKind
+
+    if not self:IsTwoHandWeapon(INVSLOT_MAINHAND) and self:IsWeaponSlot(INVSLOT_OFFHAND) then
+        local offStatus
+        offStatus, offKind = self:DescribeSlotImbue(INVSLOT_OFFHAND)
+        if offStatus == "uncertain" then
             return nil
-        elseif mainState == false then
-            missingMain = true
         end
-    else
-        local mainState = self:SlotHasWindfury(INVSLOT_MAINHAND)
-        if mainState == nil then
-            return nil
-        elseif mainState == false then
-            missingMain = true
-        end
-        if self:IsWeaponSlot(INVSLOT_OFFHAND) then
-            local offState = self:SlotHasWindfury(INVSLOT_OFFHAND)
-            if offState == nil then
-                return nil
-            elseif offState == false then
-                missingOff = true
-            end
-        end
+        missingOff = offStatus == "missing"
     end
 
     if not missingMain and not missingOff then
         return nil
     end
 
+    local recastKind = missingMain and mainKind or offKind
+    local spec = ImbueSpec(recastKind) or IMBUES.windfury
+    local missingCount = (missingMain and 1 or 0) + (missingOff and 1 or 0)
+    local sameSpell = missingMain and missingOff and mainKind == offKind
+    local label = spec.alert
+    if sameSpell and missingCount >= 2 then
+        label = label .. " (x2)"
+    end
+
     local detail
     if missingMain and missingOff then
-        detail = "Main hand and off hand missing Windfury Weapon"
+        local mainMissing = (ImbueSpec(mainKind) or IMBUES.windfury).missing
+        local offMissing = (ImbueSpec(offKind) or IMBUES.windfury).missing
+        if mainKind == offKind then
+            detail = "Main hand and off hand missing " .. mainMissing
+        else
+            detail = "Main hand missing " .. mainMissing .. "; off hand missing " .. offMissing
+        end
     elseif missingMain then
-        detail = "Main hand missing Windfury Weapon"
+        detail = "Main hand missing " .. spec.missing
     else
-        detail = "Off hand missing Windfury Weapon"
+        detail = "Off hand missing " .. spec.missing
     end
-    local missingCount = (missingMain and 1 or 0) + (missingOff and 1 or 0)
-    return detail, missingCount
+
+    return detail, missingCount, label, spec.spell
 end
 
-function Windfury:GetAlertLabelText(missingCount)
+function Windfury:GetAlertLabelText(label, missingCount)
+    if label and label ~= "" then
+        return label
+    end
     if missingCount and missingCount >= 2 then
         return ALERT_TEXT .. " (x2)"
     end
@@ -351,8 +455,14 @@ function Windfury:ApplyAlertFont()
     local font, _, flags = label:GetFont()
     label:SetFont(font or "Fonts\\FRIZQT__.TTF", size, flags or "")
     local widthScale = 12
-    if self.alertFrame.missingCount and self.alertFrame.missingCount >= 2 then
-        widthScale = 14
+    local labelText = ""
+    if self.alertFrame.label and self.alertFrame.label.GetText then
+        labelText = self.alertFrame.label:GetText() or ""
+    end
+    if (self.alertFrame.missingCount and self.alertFrame.missingCount >= 2)
+        or #labelText > 16
+    then
+        widthScale = 16
     end
     local width = size * widthScale
     if width < 140 then
@@ -363,6 +473,8 @@ function Windfury:ApplyAlertFont()
         height = 26
     end
     self.alertFrame:SetSize(width, height)
+    local _, _, _, spell = self:GetWindfuryAlertState()
+    self:SyncCastOverlay(spell)
 end
 
 function Windfury:IsAlertMoveEnabled()
@@ -395,6 +507,8 @@ function Windfury:ApplyAlertPosition()
         cfg.x or -36,
         cfg.y or -132
     )
+    local _, _, _, spell = self:GetWindfuryAlertState()
+    self:SyncCastOverlay(spell)
 end
 
 function Windfury:ApplyAlertDragMode()
@@ -413,6 +527,8 @@ function Windfury:ApplyAlertDragMode()
         frame:SetScript("OnDragStop", function(f)
             f:StopMovingOrSizing()
             Windfury:SaveAlertPosition()
+            local _, _, _, spell = Windfury:GetWindfuryAlertState()
+            Windfury:SyncCastOverlay(spell)
         end)
         frame:SetBackdropBorderColor(1, 0.82, 0, 1)
     else
@@ -433,12 +549,79 @@ function Windfury:SetAlertMove(enabled)
     self:UpdateAlert()
 end
 
+local function ShowAlertTooltip(owner)
+    local alert = Windfury.alertFrame
+    if not alert then
+        return
+    end
+    GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
+    if alert.moveHint then
+        GameTooltip:SetText(alert.moveHint, 1, 0.82, 0, 1, 1)
+    elseif alert.detail then
+        local tip = alert.detail
+        if not Windfury:IsAlertMoveEnabled() then
+            tip = tip .. "\nClick to recast."
+        end
+        GameTooltip:SetText(tip, 1, 0.82, 0, 1, 1)
+    end
+    GameTooltip:Show()
+end
+
+function Windfury:CreateCastOverlay()
+    if self.castFrame then
+        return
+    end
+
+    local cast = CreateFrame("Button", "ECA_WindfuryAlertCast", UIParent, "SecureActionButtonTemplate")
+    cast:SetFrameStrata("HIGH")
+    local baseLevel = 1
+    if self.alertFrame and self.alertFrame.GetFrameLevel then
+        baseLevel = self.alertFrame:GetFrameLevel() or 1
+    end
+    cast:SetFrameLevel(baseLevel + 10)
+    cast:EnableMouse(true)
+    cast:RegisterForClicks("LeftButtonUp")
+    cast:SetScript("OnEnter", function(self)
+        ShowAlertTooltip(self)
+    end)
+    cast:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    cast:Hide()
+    self.castFrame = cast
+end
+
+function Windfury:SyncCastOverlay(spell)
+    if InCombatLockdown() then
+        return
+    end
+    self:CreateCastOverlay()
+    local cast = self.castFrame
+    local alert = self.alertFrame
+    local want = alert
+        and alert:IsShown()
+        and not self:IsAlertMoveEnabled()
+        and type(spell) == "string"
+        and spell ~= ""
+    if want then
+        cast:SetAttribute("type", "spell")
+        cast:SetAttribute("spell", spell)
+        cast:SetAllPoints(alert)
+        cast:Show()
+        addon:Debug("Windfury: cast overlay " .. spell)
+    else
+        cast:SetAttribute("type", nil)
+        cast:SetAttribute("spell", nil)
+        cast:Hide()
+    end
+end
+
 function Windfury:CreateAlertFrame()
     if self.alertFrame then
         return
     end
 
-    local     frame = CreateFrame("Frame", "ECA_WindfuryAlert", UIParent)
+    local frame = CreateFrame("Button", "ECA_WindfuryAlert", UIParent)
     frame:SetSize(140, 26)
     frame:SetFrameStrata("HIGH")
     frame:EnableMouse(true)
@@ -459,19 +642,14 @@ function Windfury:CreateAlertFrame()
     frame.label = label
 
     frame:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        if self.moveHint then
-            GameTooltip:SetText(self.moveHint, 1, 0.82, 0, 1, 1)
-        elseif self.detail then
-            GameTooltip:SetText(self.detail, 1, 0.82, 0, 1, 1)
-        end
-        GameTooltip:Show()
+        ShowAlertTooltip(self)
     end)
     frame:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
 
     self.alertFrame = frame
+    self:CreateCastOverlay()
     self:ApplyAlertPosition()
     self:ApplyAlertFont()
     self:ApplyAlertDragMode()
@@ -489,12 +667,16 @@ function Windfury:ScheduleAlertRecheck()
     addon:Debounce("windfury_alert_recheck_long", 2.0, recheck)
 end
 
-function Windfury:OnWindfuryCast()
+function Windfury:OnImbueCast()
     self.expiryWarned = {}
     self.lastRemaining = {}
-    addon:Debug("Windfury: cast -> refresh alert")
+    addon:Debug("Windfury: imbue cast -> refresh alert")
     self:UpdateAlert()
     self:ScheduleAlertRecheck()
+end
+
+function Windfury:OnWindfuryCast()
+    self:OnImbueCast()
 end
 
 function Windfury:UpdateAlert()
@@ -502,15 +684,17 @@ function Windfury:UpdateAlert()
         if self.alertFrame then
             self.alertFrame:Hide()
         end
+        self:SyncCastOverlay(nil)
         return
     end
 
-    local detail, missingCount = self:GetWindfuryAlertState()
+    local detail, missingCount, label, spell = self:GetWindfuryAlertState()
     local moveMode = self:IsAlertMoveEnabled()
     if not detail and not moveMode then
         if self.alertFrame then
             self.alertFrame:Hide()
         end
+        self:SyncCastOverlay(nil)
         addon:Debug("Windfury: alert hidden")
         return
     end
@@ -518,17 +702,18 @@ function Windfury:UpdateAlert()
     self:CreateAlertFrame()
     self.alertFrame.missingCount = missingCount or 0
     self:ApplyAlertDragMode()
-    self:ApplyAlertFont()
     self.alertFrame.detail = detail
     self.alertFrame.moveHint = nil
-    self.alertFrame.label:SetText(self:GetAlertLabelText(missingCount))
+    self.alertFrame.label:SetText(self:GetAlertLabelText(label, missingCount))
+    self:ApplyAlertFont()
     if moveMode and not detail then
-        self.alertFrame.moveHint = "Drag to reposition " .. ALERT_TEXT .. " badge"
+        self.alertFrame.moveHint = "Drag to reposition imbue recast badge"
         addon:Debug("Windfury: alert move mode")
     elseif detail then
         addon:Debug("Windfury: alert shown (" .. detail .. ")")
     end
     self.alertFrame:Show()
+    self:SyncCastOverlay(detail and spell or nil)
 end
 
 local function WindfuryFixedScroll(value)
@@ -829,8 +1014,8 @@ function Windfury:CheckEnchantExpiry()
     for _, entry in ipairs(slots) do
         local slot = entry.slot
         seen[slot] = true
-        local state = self:SlotHasWindfury(slot)
-        if state == true then
+        local kind = self:SlotImbueKind(slot)
+        if type(kind) == "string" and ImbueSpec(kind) then
             local remaining = self:GetSlotEnchantRemaining(slot)
             if remaining then
                 local last = self.lastRemaining[slot]
@@ -841,19 +1026,20 @@ function Windfury:CheckEnchantExpiry()
 
                 if remaining > 0 and remaining <= EXPIRY_WARN_SECONDS and not self.expiryWarned[slot] then
                     self.expiryWarned[slot] = true
-                    local msg = ALERT_TEXT
+                    local msg = ImbueSpec(kind).alert
                     if #slots > 1 then
                         msg = msg .. " (" .. entry.label .. ")"
                     end
                     self:ShowExpiryCombatText(msg)
                     addon:Debug(string.format(
-                        "Windfury: expiry warning %s (%.0fs left)",
+                        "Windfury: expiry warning %s %s (%.0fs left)",
+                        kind,
                         entry.label,
                         remaining
                     ))
                 end
             end
-        elseif state == false then
+        elseif kind == false then
             self.expiryWarned[slot] = nil
             self.lastRemaining[slot] = nil
         end
@@ -1256,6 +1442,7 @@ function Windfury:Disable()
     if self.alertFrame then
         self.alertFrame:Hide()
     end
+    self:SyncCastOverlay(nil)
     if self.expiryTicker then
         self.expiryTicker:Hide()
     end
@@ -1302,14 +1489,15 @@ function Windfury:OnEvent(event, ...)
         return
     end
     if subevent == "SPELL_CAST_SUCCESS" then
-        if IsWindfury(spellId, spellName) then
+        local kind = ClassifyTooltipImbue(spellName)
+        if kind then
             addon:Debug(string.format(
                 "Windfury: cleu sub=%s id=%s name=%s match=yes",
                 tostring(subevent),
                 tostring(spellId),
                 tostring(spellName)
             ))
-            self:OnWindfuryCast()
+            self:OnImbueCast()
         end
         return
     end
