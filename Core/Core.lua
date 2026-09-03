@@ -119,7 +119,7 @@ function addon:SlashHandler(msg)
 
     if cmd == "" or cmd == "help" then
         self:Print("/eca ui")
-        self:Print("/eca partyxp on|off|status")
+        self:Print("/eca partyxp on|off|pause|unpause|force|unforce|status")
         self:Print("/eca windfury test")
         self:Print("/eca debug")
         return

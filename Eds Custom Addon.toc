@@ -10,4 +10,5 @@ Core\Config.lua
 Core\Core.lua
 Core\UI.lua
 Modules\PartyXP\PartyXP.lua
+Sounds\manifest.lua
 Modules\Windfury\Windfury.lua

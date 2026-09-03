@@ -46,6 +46,27 @@ function addon:RefreshUI()
     if panel.windfuryPath and self.db.modules.Windfury then
         panel.windfuryPath:SetText(self.db.modules.Windfury.soundFile or "")
     end
+    if panel.partyxpPause and self.db.modules.PartyXP then
+        panel.partyxpPause:SetChecked(self.db.modules.PartyXP.paused and 1 or nil)
+    end
+    if panel.partyxpForce then
+        local party = self:GetModule("PartyXP")
+        panel.partyxpForce:SetChecked(party and party.forceXP and 1 or nil)
+    end
+    if panel.windfuryAlertMove and self.db.modules.Windfury then
+        panel.windfuryAlertMove:SetChecked(self.db.modules.Windfury.alertMove and 1 or nil)
+    end
+    if panel.windfuryAlertFontSize and self.db.modules.Windfury then
+        local wf = self:GetModule("Windfury")
+        local size = wf and wf:GetAlertFontSize() or 12
+        panel.windfuryAlertFontSize:SetText(tostring(size))
+    end
+    if panel.windfuryProcPoolButtons then
+        local wf = self:GetModule("Windfury")
+        if wf then
+            wf:UpdatePreviewProcPoolHighlight(panel)
+        end
+    end
 end
 
 function addon:ToggleUI()

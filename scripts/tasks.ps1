@@ -50,6 +50,9 @@ function Invoke-Package {
     Copy-Item -LiteralPath $TocName -Destination $addonStage
     Copy-Item -LiteralPath "Core" -Destination (Join-Path $addonStage "Core") -Recurse
     Copy-Item -LiteralPath "Modules" -Destination (Join-Path $addonStage "Modules") -Recurse
+    if (Test-Path -LiteralPath "Sounds") {
+        Copy-Item -LiteralPath "Sounds" -Destination (Join-Path $addonStage "Sounds") -Recurse
+    }
     if (Test-Path -LiteralPath $ZipPath) {
         Remove-Item -LiteralPath $ZipPath -Force
     }

@@ -15,10 +15,19 @@ addon.defaults = {
     modules = {
         PartyXP = {
             enabled = true,
+            paused = false,
         },
         Windfury = {
             enabled = true,
             soundFile = "Sound\\Interface\\RaidWarning.wav",
+            alertMove = false,
+            alert = {
+                point = "TOPRIGHT",
+                relativePoint = "TOPRIGHT",
+                x = -36,
+                y = -132,
+                fontSize = 12,
+            },
         },
     },
 }

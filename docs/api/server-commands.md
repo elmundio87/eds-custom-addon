@@ -48,6 +48,10 @@ end
 
 PartyXP only sends a command when the desired state differs from `IsXPUserDisabled()`, so `/reload` does not spam `.xp`.
 
+When `db.modules.PartyXP.paused` is true, PartyXP always sends `.xp disable` if XP is on, ignoring roster. `/eca partyxp pause` sets the flag and syncs immediately; `/eca partyxp unpause` clears it and debounced sync restores roster logic.
+
+When `PartyXP.forceXP` is true (session-only, not saved), PartyXP sends `.xp enable` if XP is off, ignoring roster. `/eca partyxp force` sets it; `/eca partyxp unforce` clears it. Cleared on `/reload`. Mutually exclusive with pause.
+
 ## Addon slash commands (client)
 
 ```lua
@@ -57,4 +61,4 @@ SlashCmdList["EDSCUSTOMADDON"] = function(msg)
 end
 ```
 
-This addon: `/eca ui`, `/eca partyxp on|off|status`, `/eca debug`.
+This addon: `/eca ui`, `/eca partyxp on|off|pause|unpause|force|unforce|status`, `/eca debug`.

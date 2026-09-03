@@ -1,1 +1,2 @@
 lupa>=2.8
+mutagen>=1.47

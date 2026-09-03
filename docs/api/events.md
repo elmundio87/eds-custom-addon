@@ -50,4 +50,4 @@ Windfury Weapon extra swings show as `SPELL_EXTRA_ATTACKS` (one event per proc).
 - Re-scan the full roster on `PARTY_MEMBER_DISABLE` / `PARTY_MEMBER_ENABLE` instead of trusting `arg1`.
 - First XP sync on `PLAYER_ENTERING_WORLD`, not only on `ADDON_LOADED` (roster can still be empty at load).
 - Retry XP sync on `PLAYER_ALIVE` / `PLAYER_UNGHOST` (in-place rez may not fire `PLAYER_ENTERING_WORLD`).
-- Windfury sound: `COMBAT_LOG_EVENT_UNFILTERED` args (not `CombatLogGetCurrentEventInfo`); throttle 0.15s per proc.
+- Windfury sound: `COMBAT_LOG_EVENT_UNFILTERED` args (not `CombatLogGetCurrentEventInfo`); one sound per proc burst (0.15s), highest category wins (`kill` > `lowhp` > `default`).
