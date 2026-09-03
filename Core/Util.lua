@@ -28,16 +28,20 @@ local pending = {}
 debounceFrame:Hide()
 debounceFrame:SetScript("OnUpdate", function(self)
     local now = GetTime()
-    local remaining = false
+    local ready = {}
     for key, item in pairs(pending) do
         if now >= item.fireAt then
-            pending[key] = nil
-            item.fn()
-        else
-            remaining = true
+            table.insert(ready, key)
         end
     end
-    if not remaining then
+    for _, key in ipairs(ready) do
+        local item = pending[key]
+        if item and now >= item.fireAt then
+            pending[key] = nil
+            item.fn()
+        end
+    end
+    if next(pending) == nil then
         self:Hide()
     end
 end)
