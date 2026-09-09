@@ -1244,6 +1244,98 @@ def test_addon(lua) -> None:
 
         wow.resetChat()
         lua.execute("""
+            wow.state.cvars.Sound_MusicVolume = "1"
+            WindfurySounds = { [1] = "Sounds/a.mp3" }
+            WindfurySoundDurations = { ["Sounds/a.mp3"] = 2.0 }
+            local wf = EdsCustomAddon:GetModule("Windfury")
+            wf.soundBusyUntil = nil; wf.soundBusyIsKill = nil
+            EdsCustomAddon.db.modules.Windfury.musicDuck = { active = false, saved = nil }
+            math.random = function() return 1 end
+            wf:Play()
+        """)
+        vol = lua.eval('tonumber(GetCVar("Sound_MusicVolume"))')
+        if vol == 0.25:
+            ok("WF play ducks music volume")
+        else:
+            fail(f"music duck vol {vol}")
+
+        wow.resetChat()
+        lua.execute("""
+            wow.state.cvars.Sound_MusicVolume = "1"
+            WindfurySounds = { [1] = "Sounds/a.mp3" }
+            WindfurySoundsKill = { [1] = "Sounds/kill-x.mp3" }
+            WindfurySoundDurations = {
+                ["Sounds/a.mp3"] = 2.0,
+                ["Sounds/kill-x.mp3"] = 3.0,
+            }
+            local wf = EdsCustomAddon:GetModule("Windfury")
+            wf.soundBusyUntil = nil; wf.soundBusyIsKill = nil
+            EdsCustomAddon.db.modules.Windfury.musicDuck = { active = false, saved = nil }
+            math.random = function() return 1 end
+            wf:Play("default")
+            wf:Play("kill")
+        """)
+        saved = lua.eval("EdsCustomAddon.db.modules.Windfury.musicDuck.saved")
+        vol = lua.eval('tonumber(GetCVar("Sound_MusicVolume"))')
+        if saved == "1" and vol == 0.25:
+            ok("WF music duck keeps original across overlapping play")
+        else:
+            fail(f"music duck saved={saved} vol={vol}")
+
+        wow.resetChat()
+        lua.execute("""
+            wow.state.cvars.Sound_MusicVolume = "1"
+            WindfurySounds = { [1] = "Sounds/a.mp3" }
+            WindfurySoundDurations = { ["Sounds/a.mp3"] = 2.0 }
+            local wf = EdsCustomAddon:GetModule("Windfury")
+            wf.soundBusyUntil = nil; wf.soundBusyIsKill = nil
+            EdsCustomAddon.db.modules.Windfury.musicDuck = { active = false, saved = nil }
+            math.random = function() return 1 end
+            wf:Play()
+            wow.time = wow.time + 2.1
+            wow.tick(0.05)
+        """)
+        vol = lua.eval('tonumber(GetCVar("Sound_MusicVolume"))')
+        active = lua.eval("EdsCustomAddon.db.modules.Windfury.musicDuck.active")
+        if active and vol is not None and vol < 1:
+            ok("WF music still fading after clip duration")
+        else:
+            fail(f"music mid-fade vol={vol} active={active}")
+        lua.execute("wow.tick(0.8)")
+        vol = lua.eval('tonumber(GetCVar("Sound_MusicVolume"))')
+        active = lua.eval("EdsCustomAddon.db.modules.Windfury.musicDuck.active")
+        if vol == 1 and not active:
+            ok("WF music fades back after clip duration")
+        else:
+            fail(f"music fade restore vol={vol} active={active}")
+
+        wow.resetChat()
+        lua.execute("""
+            wow.state.cvars.Sound_MusicVolume = "0.8"
+            WindfurySounds = { [1] = "Sounds/a.mp3" }
+            WindfurySoundDurations = { ["Sounds/a.mp3"] = 5.0 }
+            local wf = EdsCustomAddon:GetModule("Windfury")
+            wf.soundBusyUntil = nil; wf.soundBusyIsKill = nil
+            EdsCustomAddon.db.modules.Windfury.musicDuck = { active = false, saved = nil }
+            math.random = function() return 1 end
+            wf:Play()
+            wf:Disable()
+        """)
+        vol = lua.eval('tonumber(GetCVar("Sound_MusicVolume"))')
+        active = lua.eval("EdsCustomAddon.db.modules.Windfury.musicDuck.active")
+        if vol == 0.8 and not active:
+            ok("WF Disable restores music volume")
+        else:
+            fail(f"Disable music restore vol={vol} active={active}")
+        lua.execute("""
+            local wf = EdsCustomAddon:GetModule("Windfury")
+            wf:Enable()
+            wf.soundBusyUntil = nil; wf.soundBusyIsKill = nil
+            EdsCustomAddon.db.modules.Windfury.musicDuck = { active = false, saved = nil }
+        """)
+
+        wow.resetChat()
+        lua.execute("""
             WindfurySounds = {
                 [1] = "Sounds/a.mp3",
                 [2] = "Sounds/b.mp3",
@@ -2593,6 +2685,23 @@ def test_addon(lua) -> None:
 
 
 def main() -> int:
+    if "--manifest-only" in sys.argv:
+        print(f"root: {ROOT}")
+        sound_pools, sound_durations = generate_sound_manifest()
+        sound_count = sum(len(paths) for paths in sound_pools.values())
+        if sound_count:
+            ok(
+                "sound manifest: "
+                f"{sound_count} file(s) "
+                f"(default={len(sound_pools['default'])}, "
+                f"lowhp={len(sound_pools['lowhp'])}, "
+                f"kill={len(sound_pools['kill'])}), "
+                f"durations={len(sound_durations)}"
+            )
+        else:
+            ok("sound manifest: empty (fallback path or RaidWarning)")
+        return 0
+
     try:
         from lupa import LuaRuntime
     except ImportError:

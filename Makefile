@@ -4,13 +4,16 @@
 PS     := powershell.exe -NoProfile -ExecutionPolicy Bypass -File
 TASKS  := scripts/tasks.ps1
 
-.PHONY: setup build test lint run clean validate package
+.PHONY: setup build test lint run clean validate package manifest
 
 setup:
 	python -m pip install -r scripts/requirements-dev.txt
 	$(PS) $(TASKS) -Task validate
 
-build: package
+manifest:
+	python scripts/check.py --manifest-only
+
+build: manifest package
 
 test:
 	python scripts/check.py

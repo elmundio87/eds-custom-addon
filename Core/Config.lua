@@ -25,6 +25,10 @@ addon.defaults = {
                 main = "windfury",
                 off = "windfury",
             },
+            musicDuck = {
+                active = false,
+                saved = nil,
+            },
             alert = {
                 point = "TOPRIGHT",
                 relativePoint = "TOPRIGHT",

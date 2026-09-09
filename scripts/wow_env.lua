@@ -29,6 +29,9 @@ wow = {
         bgScoreRequests = 0,
         friends = {},
         inCombat = false,
+        cvars = {
+            Sound_MusicVolume = "1",
+        },
     },
 }
 
@@ -247,6 +250,21 @@ end
 
 function InCombatLockdown()
     return wow.state.inCombat and 1 or nil
+end
+
+function GetCVar(name)
+    local cvars = wow.state.cvars
+    if not cvars then
+        return nil
+    end
+    return cvars[name]
+end
+
+function SetCVar(name, value)
+    if not wow.state.cvars then
+        wow.state.cvars = {}
+    end
+    wow.state.cvars[name] = tostring(value)
 end
 
 function IsInInstance()
@@ -597,6 +615,10 @@ function wow.resetChat()
     wow.state.targetGUID = nil
     wow.state.targetHealth = 0
     wow.state.targetHealthMax = 0
+    if not wow.state.cvars then
+        wow.state.cvars = {}
+    end
+    wow.state.cvars.Sound_MusicVolume = "1"
 end
 
 function wow.resetInventory()

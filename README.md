@@ -52,7 +52,7 @@ The panel has **Test proc** (random shuffle + combat text; pick **Default**, **L
 - `lowhp-` — plays when the target is below 20% HP before the hit (**current target only**)
 - no prefix — default proc pool
 
-Each pool shuffles independently (queue size is `pool size - 1`, capped at 10). Empty `kill-`/`lowhp-` pools fall back to default. Drop files in `Sounds/` — after adding or removing sounds, run `make lint` to regenerate `Sounds/manifest.lua` (WoW cannot scan folders at runtime). Lint also records each clip’s duration so only one sound plays at a time (new procs skip until the current clip ends); a **kill** sound can override a non-kill clip still playing (the two may overlap). Extra hits within 0.15s share one sound and one floating combat text pop. Procs within 5s of the last one show **WINDFURY x2**, **x3**, and so on (including repeated `/eca windfury test` for preview); each streak update replaces the previous WINDFURY pop instead of stacking. WINDFURY text uses Blizzard's crit zoom-in at a fixed spot above the default anchor (tweak `TEXT_Y_OFFSET` in `Windfury.lua`). Requires Interface → Combat → **Floating Combat Text** enabled. `/eca debug` traces CLEU match, throttle skips, `PlaySoundFile` path, and combat text.
+Each pool shuffles independently (queue size is `pool size - 1`, capped at 10). Empty `kill-`/`lowhp-` pools fall back to default. Drop files in `Sounds/` — after adding or removing sounds, run `make build` or `make lint` to regenerate `Sounds/manifest.lua` (WoW cannot scan folders at runtime). Lint also records each clip’s duration so only one sound plays at a time (new procs skip until the current clip ends); a **kill** sound can override a non-kill clip still playing (the two may overlap). While a clip plays, music volume is ducked to 25% instantly, then faded back in over ~0.75s when the clip ends (saved across `/reload` if interrupted). Extra hits within 0.15s share one sound and one floating combat text pop. Procs within 5s of the last one show **WINDFURY x2**, **x3**, and so on (including repeated `/eca windfury test` for preview); each streak update replaces the previous WINDFURY pop instead of stacking. WINDFURY text uses Blizzard's crit zoom-in at a fixed spot above the default anchor (tweak `TEXT_Y_OFFSET` in `Windfury.lua`). Requires Interface → Combat → **Floating Combat Text** enabled. `/eca debug` traces CLEU match, throttle skips, `PlaySoundFile` path, and combat text.
 
 ## Panel
 
@@ -75,9 +75,11 @@ docs/api/               # 3.3.5 event/roster/command cache
 ```
 make setup      # pip install lupa + validate TOC
 make validate
-make lint       # syntax + 3.3.5 API lint + mocked unit tests
+make lint       # regenerates sound manifest + syntax/API lint + mocked unit tests
 make test       # same as lint
-make package    # dist/EdsCustomAddon.zip (game files only)
+make manifest   # regenerate Sounds/manifest.lua only
+make build      # manifest + package
+make package    # dist/EdsCustomAddon.zip (game files only; no manifest regen)
 make clean
 make run        # print in-game command reminder
 ```

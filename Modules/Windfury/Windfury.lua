@@ -21,6 +21,9 @@ local STREAK_WINDOW = 5
 local TEXT_Y_OFFSET = 280
 local RECENT_SOUND_CAP = 10
 local DEFAULT_SOUND_DURATION = 0.5
+local MUSIC_VOLUME_CVAR = "Sound_MusicVolume"
+local MUSIC_DUCK_FACTOR = 0.25
+local MUSIC_FADE_IN = 0.75
 local PROC_CATEGORY_PRIORITY = {
     default = 1,
     lowhp = 2,
@@ -899,6 +902,130 @@ function Windfury:IsKillSoundPath(path)
     return name:sub(1, 5) == "kill-"
 end
 
+function Windfury:GetMusicDuckDb()
+    if not addon.db.modules.Windfury then
+        addon.db.modules.Windfury = {}
+    end
+    local entry = addon.db.modules.Windfury
+    if type(entry.musicDuck) ~= "table" then
+        entry.musicDuck = {
+            active = false,
+            saved = nil,
+        }
+    end
+    return entry.musicDuck
+end
+
+function Windfury:EnsureMusicFadeFrame()
+    if self.musicFadeFrame then
+        return self.musicFadeFrame
+    end
+    local frame = CreateFrame("Frame")
+    frame:Hide()
+    frame:SetScript("OnUpdate", function(_, elapsed)
+        Windfury:OnMusicFadeUpdate(elapsed)
+    end)
+    self.musicFadeFrame = frame
+    return frame
+end
+
+function Windfury:StopMusicFade()
+    self.musicFade = nil
+    if self.musicFadeFrame then
+        self.musicFadeFrame:Hide()
+    end
+end
+
+function Windfury:FinishMusicDuck()
+    local duck = self:GetMusicDuckDb()
+    duck.active = false
+    duck.saved = nil
+    self:StopMusicFade()
+end
+
+function Windfury:ApplyDuckedVolume()
+    local duck = self:GetMusicDuckDb()
+    local vol = tonumber(duck.saved) or 1
+    local ducked = vol * MUSIC_DUCK_FACTOR
+    if ducked < 0 then
+        ducked = 0
+    end
+    SetCVar(MUSIC_VOLUME_CVAR, tostring(ducked))
+    return vol, ducked
+end
+
+function Windfury:BeginMusicDuck()
+    self:StopMusicFade()
+    local duck = self:GetMusicDuckDb()
+    if not duck.active then
+        duck.saved = GetCVar(MUSIC_VOLUME_CVAR)
+        duck.active = true
+    end
+    local vol, ducked = self:ApplyDuckedVolume()
+    addon:Debug(string.format("Windfury: music duck %.3f -> %.3f", vol, ducked))
+end
+
+function Windfury:OnMusicFadeUpdate(elapsed)
+    local fade = self.musicFade
+    local duck = self:GetMusicDuckDb()
+    if not fade or not duck.active then
+        self:StopMusicFade()
+        return
+    end
+    fade.elapsed = (fade.elapsed or 0) + elapsed
+    local t = fade.elapsed / MUSIC_FADE_IN
+    if t >= 1 then
+        SetCVar(MUSIC_VOLUME_CVAR, fade.target)
+        addon:Debug("Windfury: music restore " .. tostring(fade.target))
+        self:FinishMusicDuck()
+        return
+    end
+    local vol = fade.from + (fade.to - fade.from) * t
+    SetCVar(MUSIC_VOLUME_CVAR, tostring(vol))
+end
+
+function Windfury:RestoreMusicDuck(instant)
+    local duck = self:GetMusicDuckDb()
+    if not duck.active then
+        self:StopMusicFade()
+        return
+    end
+    local target = duck.saved
+    if target == nil then
+        self:FinishMusicDuck()
+        return
+    end
+    if instant then
+        SetCVar(MUSIC_VOLUME_CVAR, target)
+        addon:Debug("Windfury: music restore " .. tostring(target))
+        self:FinishMusicDuck()
+        return
+    end
+    local from = tonumber(GetCVar(MUSIC_VOLUME_CVAR)) or (tonumber(target) or 1) * MUSIC_DUCK_FACTOR
+    local to = tonumber(target) or 1
+    self.musicFade = {
+        from = from,
+        to = to,
+        target = target,
+        elapsed = 0,
+    }
+    self:EnsureMusicFadeFrame():Show()
+    addon:Debug(string.format("Windfury: music fade %.3f -> %.3f", from, to))
+end
+
+function Windfury:ScheduleMusicRestore()
+    local delay = 0
+    if self.soundBusyUntil then
+        delay = self.soundBusyUntil - GetTime()
+        if delay < 0 then
+            delay = 0
+        end
+    end
+    addon:Debounce("windfury_music_restore", delay, function()
+        Windfury:RestoreMusicDuck()
+    end)
+end
+
 function Windfury:TryPlayFile(path, category)
     local now = GetTime()
     local incomingKill = category == "kill"
@@ -922,6 +1049,8 @@ function Windfury:TryPlayFile(path, category)
         self.soundBusyUntil = now + DEFAULT_SOUND_DURATION
     end
     self.soundBusyIsKill = incomingKill and true or false
+    self:BeginMusicDuck()
+    self:ScheduleMusicRestore()
     return true
 end
 
@@ -1425,6 +1554,7 @@ function Windfury:Init(owner)
         end)
         self.expiryTicker = ticker
     end
+    self:RestoreMusicDuck(true)
 end
 
 function Windfury:Enable()
@@ -1443,6 +1573,7 @@ function Windfury:Disable()
         self.alertFrame:Hide()
     end
     self:SyncCastOverlay(nil)
+    self:RestoreMusicDuck(true)
     if self.expiryTicker then
         self.expiryTicker:Hide()
     end
