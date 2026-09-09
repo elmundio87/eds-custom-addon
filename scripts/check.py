@@ -145,6 +145,8 @@ def lint_toc() -> None:
         "Modules/Windfury/Windfury.lua",
         "Modules/BGSync/BGSync.lua",
         "Modules/TradeSkillFav/TradeSkillFav.lua",
+        "Modules/Fishing/Fishing.lua",
+        "Modules/ArathiBasin/ArathiBasin.lua",
     ]
     if files == expected:
         ok("TOC load order")
@@ -193,6 +195,16 @@ def lint_lua_static() -> None:
         ok("BGSync registers itself")
     else:
         fail("BGSync.lua does not call RegisterModule")
+    fishing = (ROOT / "Modules" / "Fishing" / "Fishing.lua").read_text(encoding="utf-8")
+    if "RegisterModule" in fishing:
+        ok("Fishing registers itself")
+    else:
+        fail("Fishing.lua does not call RegisterModule")
+    arathi = (ROOT / "Modules" / "ArathiBasin" / "ArathiBasin.lua").read_text(encoding="utf-8")
+    if "RegisterModule" in arathi:
+        ok("ArathiBasin registers itself")
+    else:
+        fail("ArathiBasin.lua does not call RegisterModule")
     tsf = (ROOT / "Modules" / "TradeSkillFav" / "TradeSkillFav.lua").read_text(encoding="utf-8")
     if "RegisterModule" in tsf:
         ok("TradeSkillFav registers itself")
@@ -2529,6 +2541,32 @@ def test_addon(lua) -> None:
 
         lua.execute("""
             local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
+            wow.state.tradeSkill.selection = 2
+            -- Blizzard leaves a reused row's name font string stretched.
+            TradeSkillSkill2Text:SetWidth(TRADE_SKILL_TEXT_WIDTH)
+            tsf:PaintCustomList()
+            _G.__tsf_hl_shown = TradeSkillHighlightFrame.shown and true or false
+            local _, relativeTo = TradeSkillHighlightFrame:GetPoint()
+            _G.__tsf_hl_row = relativeTo and relativeTo:GetName()
+            _G.__tsf_row1_hl = TradeSkillSkill1.highlighted and true or false
+            _G.__tsf_count = TradeSkillSkill2Count:GetText()
+            _G.__tsf_name_width = TradeSkillSkill2Text:GetWidth()
+        """)
+        if lua.eval("__tsf_hl_shown") and lua.eval("__tsf_hl_row") == "TradeSkillSkill2":
+            ok("TradeSkillFav highlights the row holding the selected recipe")
+        else:
+            fail(f"highlight on {lua.eval('__tsf_hl_row')} shown={lua.eval('__tsf_hl_shown')}")
+        if not lua.eval("__tsf_row1_hl"):
+            ok("TradeSkillFav leaves the Favourites header unhighlighted")
+        else:
+            fail("Favourites header row locked highlight")
+        if lua.eval("__tsf_count") == "[3]" and lua.eval("__tsf_name_width") == 0:
+            ok("TradeSkillFav anchors [n] to the end of the recipe name")
+        else:
+            fail(f"count {lua.eval('__tsf_count')} name width {lua.eval('__tsf_name_width')}")
+
+        lua.execute("""
+            local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
             EdsCustomAddon.db.modules.TradeSkillFav.mode = "all"
             wow.state.tradeSkill.selection = 2
             tsf:SetAlchemyActive(true)
@@ -2540,10 +2578,15 @@ def test_addon(lua) -> None:
             TradeSkillFrame_SetSelection(2)
             wow.tick(0.05)
             _G.__tsf_sel_text = button:GetText()
+            _G.__tsf_sel_star = button.favStar and button.favStar.shown and true or false
         """)
         sel_text = lua.eval("__tsf_sel_text")
-        if "RaidTargetingIcon_1" in (sel_text or ""):
-            ok("TradeSkillFav restores star after selecting a recipe")
+        if lua.eval("__tsf_sel_star"):
+            ok("TradeSkillFav stars the row after selecting a recipe")
+        else:
+            fail("favourite star missing on selected row")
+        if sel_text == "Minor Healing Potion":
+            ok("TradeSkillFav leaves the recipe name and [n] count untouched")
         else:
             fail(f"selected row text {sel_text}")
 
@@ -2558,6 +2601,356 @@ def test_addon(lua) -> None:
         else:
             fail("IsAlchemy true for Blacksmithing")
         lua.execute('wow.state.tradeSkill.line = "Alchemy"')
+
+    # --- Fishing ---
+    fish = addon.GetModule(addon, "Fishing")
+    if fish is None:
+        fail("Fishing not registered")
+    else:
+        ok("Fishing registered")
+        if fish.enabled:
+            ok("Fishing enabled by default")
+        else:
+            fail("Fishing should default to enabled")
+
+        wow.resetInventory()
+        lua.execute("""
+            wow.state.cursor = { x = 400, y = 300 }
+            wow.state.uiScale = 1
+            wow.setInventorySlot(16, {
+                link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Pole]|h|r",
+                name = "Strong Fishing Pole",
+                itemType = "Weapon",
+                subType = "Fishing Pole",
+                equipLoc = "INVTYPE_2HWEAPON",
+            })
+            EdsCustomAddon:GetModule("Fishing"):OnEvent("UNIT_INVENTORY_CHANGED", "player")
+        """)
+        button = lua.eval("ECA_FishButton")
+        if button and button.shown:
+            ok("Fish button spawns when a fishing pole is equipped")
+        else:
+            fail("fish button hidden with pole equipped")
+        if button and button.attributes["spell"] == "Fishing":
+            ok("Fish button casts Fishing on click")
+        else:
+            fail(f"fish button spell {button and button.attributes}")
+        point = lua.eval("{ ECA_FishButton:GetPoint() }")
+        if point[4] == 400 and point[5] == 300:
+            ok("Fish button spawns at the cursor")
+        else:
+            fail(f"fish button point {point[4]},{point[5]}")
+
+        lua.execute("""
+            local fish = EdsCustomAddon:GetModule("Fishing")
+            fish:OnEvent("UNIT_SPELLCAST_SENT", "player", "Fishing")
+            _G.__fish_cast_fade = fish.fadeStart ~= nil
+            fish:HideButton()
+            fish:Update(true, true)
+        """)
+        if lua.eval("__fish_cast_fade"):
+            ok("Fish button fades when Fishing is cast")
+        else:
+            fail("cast did not start the fade")
+
+        lua.execute("""
+            ECA_FishButton.scripts.PostClick(ECA_FishButton)
+            wow.tick(0.5)
+            _G.__fish_mid_alpha = ECA_FishButton:GetAlpha()
+            _G.__fish_mid_shown = ECA_FishButton.shown and true or false
+            wow.tick(1.2)
+            _G.__fish_faded = ECA_FishButton.shown and true or false
+        """)
+        mid_alpha = lua.eval("__fish_mid_alpha")
+        if lua.eval("__fish_mid_shown") and 0 < mid_alpha < 1:
+            ok("Fish button fades after being clicked")
+        else:
+            fail(f"fish button alpha after click {mid_alpha}")
+        if not lua.eval("__fish_faded"):
+            ok("Fish button hides once faded out")
+        else:
+            fail("fish button still shown after fade")
+
+        wow.resetInventory()
+        lua.execute("""
+            wow.setInventorySlot(16, {
+                link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
+                name = "Axe",
+                itemType = "Weapon",
+                subType = "Axe",
+                equipLoc = "INVTYPE_WEAPON",
+            })
+            EdsCustomAddon:GetModule("Fishing"):OnEvent("UNIT_INVENTORY_CHANGED", "player")
+        """)
+        button = lua.eval("ECA_FishButton")
+        if button and not button.shown:
+            ok("Fish button hidden without a fishing pole")
+        else:
+            fail("fish button shown without pole")
+
+        lua.execute("""
+            wow.state.inCombat = true
+            wow.setInventorySlot(16, {
+                link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Pole]|h|r",
+                name = "Strong Fishing Pole",
+                itemType = "Weapon",
+                subType = "Fishing Pole",
+                equipLoc = "INVTYPE_2HWEAPON",
+            })
+            EdsCustomAddon:GetModule("Fishing"):OnEvent("UNIT_INVENTORY_CHANGED", "player")
+        """)
+        button = lua.eval("ECA_FishButton")
+        if button and not button.shown:
+            ok("Fish button stays hidden in combat lockdown")
+        else:
+            fail("fish button shown during combat")
+        lua.execute("wow.state.inCombat = false")
+        wow.resetInventory()
+
+    # --- ArathiBasin ---
+    ab = addon.GetModule(addon, "ArathiBasin")
+    if ab is None:
+        fail("ArathiBasin not registered")
+    else:
+        ok("ArathiBasin registered")
+        if ab.enabled:
+            ok("ArathiBasin enabled by default")
+        else:
+            fail("ArathiBasin should default to enabled")
+
+        wow.resetBattleground()
+        lua.execute("""
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab.bases = {}
+            ab.cachedLandmarks = nil
+            ab:Poll()
+            _G.__ab_shown = ECA_ArathiBasin and ECA_ArathiBasin.shown and true or false
+        """)
+        if not lua.eval("__ab_shown"):
+            ok("ArathiBasin frame hidden outside AB")
+        else:
+            fail("ArathiBasin frame shown outside AB")
+
+        lua.execute("""
+            wow.setArathiBasin({
+                { name = "Stables", index = 16, description = "Alliance Controlled" },
+                { name = "Farm", index = 17, description = "Horde Controlled" },
+                { name = "Blacksmith", index = 16, description = "Alliance Controlled" },
+                { name = "Lumber Mill", index = 18, description = "In Conflict" },
+                { name = "Gold Mine", index = 16, description = "Uncontrolled" },
+            })
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab.bases = {}
+            ab.cachedLandmarks = nil
+            wow.state.mapZoneSets = 0
+            ab:Poll(true)
+            _G.__ab_first_deadline = ab.bases.Stables and ab.bases.Stables.deadline
+            _G.__ab_first_index = ab.bases.Stables and ab.bases.Stables.index
+            _G.__ab_shown = ECA_ArathiBasin and ECA_ArathiBasin.shown and true or false
+            _G.__ab_map_sets = wow.state.mapZoneSets
+            local stables = ab.bases.Stables
+            local farm = ab.bases.Farm
+            _G.__ab_stables_status = select(1, ab:StatusInfo(stables))
+            _G.__ab_farm_status = select(1, ab:StatusInfo(farm))
+            _G.__ab_mine_status = select(1, ab:StatusInfo(ab.bases["Gold Mine"]))
+        """)
+        if lua.eval("__ab_first_deadline") is None and lua.eval("__ab_first_index") == 16:
+            ok("ArathiBasin first sighting starts no timer")
+        else:
+            fail(
+                f"first sight deadline={lua.eval('__ab_first_deadline')} "
+                f"index={lua.eval('__ab_first_index')}"
+            )
+        if lua.eval("__ab_shown"):
+            ok("ArathiBasin frame shown in AB")
+        else:
+            fail("ArathiBasin frame hidden in AB")
+        if lua.eval("__ab_map_sets") and lua.eval("__ab_map_sets") >= 1:
+            ok("ArathiBasin snaps map on forced poll when map is closed")
+        else:
+            fail(f"mapZoneSets={lua.eval('__ab_map_sets')}")
+        if lua.eval("__ab_stables_status") == "Holding":
+            ok("ArathiBasin marks player-held bases as Holding")
+        else:
+            fail(f"stables status {lua.eval('__ab_stables_status')}")
+        if lua.eval("__ab_farm_status") == "Occupied":
+            ok("ArathiBasin marks enemy-held bases as Occupied")
+        else:
+            fail(f"farm status {lua.eval('__ab_farm_status')}")
+        if lua.eval("__ab_mine_status") == "Unclaimed":
+            ok("ArathiBasin marks neutral bases as Unclaimed")
+        else:
+            fail(f"mine status {lua.eval('__ab_mine_status')}")
+
+        lua.execute("""
+            wow.state.mapZoneSets = 0
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab:Poll(false)
+            _G.__ab_reuse_sets = wow.state.mapZoneSets
+        """)
+        if lua.eval("__ab_reuse_sets") == 0:
+            ok("ArathiBasin skips SetMapToCurrentZone when AB landmarks are already loaded")
+        else:
+            fail(f"unnecessary map snap count={lua.eval('__ab_reuse_sets')}")
+
+        lua.execute("""
+            wow.setLandmarks({
+                { name = "Stables", index = 18, description = "Alliance Contested" },
+                { name = "Farm", index = 17, description = "Horde Controlled" },
+                { name = "Blacksmith", index = 16, description = "Alliance Controlled" },
+                { name = "Lumber Mill", index = 18, description = "In Conflict" },
+                { name = "Gold Mine", index = 16, description = "Uncontrolled" },
+            })
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab.cachedLandmarks = nil
+            ab:Poll()
+            _G.__ab_assault_deadline = ab.bases.Stables.deadline
+            _G.__ab_assault_left = ab.bases.Stables.deadline and (ab.bases.Stables.deadline - GetTime())
+            _G.__ab_assault_status = select(1, ab:StatusInfo(ab.bases.Stables))
+            -- Horde player sees Alliance Contested on their Farm as Defending.
+            wow.state.playerFaction = "Horde"
+            ab.bases.Farm.owner = "horde"
+            ab.bases.Farm.assaulting = "alliance"
+            ab.bases.Farm.deadline = GetTime() + 60
+            ab.bases.Farm.description = "Alliance Contested"
+            _G.__ab_defend_status = select(1, ab:StatusInfo(ab.bases.Farm))
+            wow.state.playerFaction = "Alliance"
+        """)
+        assault_left = lua.eval("__ab_assault_left")
+        if lua.eval("__ab_assault_deadline") is not None and assault_left and 59 <= assault_left <= 60:
+            ok("ArathiBasin index change starts a 60s countdown")
+        else:
+            fail(f"assault left={assault_left} deadline={lua.eval('__ab_assault_deadline')}")
+        if lua.eval("__ab_assault_status") == "Taking":
+            ok("ArathiBasin marks player assaults as Taking")
+        else:
+            fail(f"assault status {lua.eval('__ab_assault_status')}")
+        if lua.eval("__ab_defend_status") == "Defending":
+            ok("ArathiBasin marks enemy assaults on owned bases as Defending")
+        else:
+            fail(f"defend status {lua.eval('__ab_defend_status')}")
+
+        lua.execute("""
+            wow.tick(10)
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab:UpdateFrame()
+            _G.__ab_after_tick = ab.bases.Stables.deadline and (ab.bases.Stables.deadline - GetTime())
+        """)
+        after_tick = lua.eval("__ab_after_tick")
+        if after_tick is not None and 49 <= after_tick <= 51:
+            ok("ArathiBasin countdown drains with time")
+        else:
+            fail(f"after tick left={after_tick}")
+
+        lua.execute("""
+            wow.setLandmarks({
+                { name = "Stables", index = 17 },
+                { name = "Farm", index = 16 },
+                { name = "Blacksmith", index = 16 },
+                { name = "Lumber Mill", index = 16 },
+                { name = "Gold Mine", index = 16 },
+            })
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab.cachedLandmarks = nil
+            ab:Poll()
+            _G.__ab_cleared = ab.bases.Stables.deadline
+        """)
+        if lua.eval("__ab_cleared") is None:
+            ok("ArathiBasin next index change clears the countdown")
+        else:
+            fail(f"deadline still set {lua.eval('__ab_cleared')}")
+
+        lua.execute("""
+            wow.setLandmarks({
+                { name = "Stables", index = 19, description = "Horde Contested" },
+                { name = "Farm", index = 17, description = "Horde Controlled" },
+                { name = "Blacksmith", index = 16, description = "Alliance Controlled" },
+                { name = "Lumber Mill", index = 18, description = "In Conflict" },
+                { name = "Gold Mine", index = 16, description = "Uncontrolled" },
+            })
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab.cachedLandmarks = nil
+            ab:Poll()
+            local left_before = ab.bases.Stables.deadline - GetTime()
+            ab:SaveTracking()
+            local saved = EdsCustomAddon.db.modules.ArathiBasin.tracking.Stables
+            -- Simulate /reload: wipe runtime state, advance wall clock 12s, reload SV.
+            ab.bases = {}
+            ab.cachedLandmarks = nil
+            wow.wallClock = wow.wallClock + 12
+            ab:LoadTracking()
+            _G.__ab_reload_left = ab.bases.Stables
+                and ab.bases.Stables.deadline
+                and (ab.bases.Stables.deadline - GetTime())
+            _G.__ab_reload_index = ab.bases.Stables and ab.bases.Stables.index
+            _G.__ab_saved_remaining = saved and saved.remaining
+            _G.__ab_left_before = left_before
+        """)
+        reload_left = lua.eval("__ab_reload_left")
+        left_before = lua.eval("__ab_left_before")
+        if (
+            reload_left is not None
+            and left_before is not None
+            and abs(reload_left - (left_before - 12)) < 1.0
+            and lua.eval("__ab_reload_index") == 19
+        ):
+            ok("ArathiBasin tracking survives a /reload")
+        else:
+            fail(
+                f"reload left={reload_left} before={left_before} "
+                f"index={lua.eval('__ab_reload_index')}"
+            )
+
+        lua.execute("""
+            wow.setArathiBasin({
+                { name = "Stables", index = 19, description = "Horde Contested" },
+                { name = "Farm", index = 17, description = "Horde Controlled" },
+                { name = "Blacksmith", index = 16, description = "Alliance Controlled" },
+                { name = "Lumber Mill", index = 18, description = "In Conflict" },
+                { name = "Gold Mine", index = 16, description = "Uncontrolled" },
+            })
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab:LoadTracking()
+            ab.cachedLandmarks = nil
+            wow.state.mapZoneSets = 0
+            WorldMapFrame:Show()
+            wow.setLandmarks({
+                { name = "Stables", index = 99 },
+                { name = "Farm", index = 16 },
+                { name = "Blacksmith", index = 16 },
+                { name = "Lumber Mill", index = 16 },
+                { name = "Gold Mine", index = 16 },
+            })
+            local before = ab.bases.Stables.index
+            ab:Poll()
+            _G.__ab_map_open_sets = wow.state.mapZoneSets
+            _G.__ab_map_open_index = ab.bases.Stables.index
+            _G.__ab_map_open_before = before
+            WorldMapFrame:Hide()
+        """)
+        if lua.eval("__ab_map_open_sets") == 0:
+            ok("ArathiBasin does not re-point the map while WorldMapFrame is shown")
+        else:
+            fail(f"mapZoneSets while map open={lua.eval('__ab_map_open_sets')}")
+        if lua.eval("__ab_map_open_index") == lua.eval("__ab_map_open_before"):
+            ok("ArathiBasin reuses cached landmarks while the map is open")
+        else:
+            fail(
+                f"index changed while map open "
+                f"{lua.eval('__ab_map_open_before')}->{lua.eval('__ab_map_open_index')}"
+            )
+
+        lua.execute("""
+            wow.resetBattleground()
+            local ab = EdsCustomAddon:GetModule("ArathiBasin")
+            ab:OnEvent("ZONE_CHANGED_NEW_AREA")
+            _G.__ab_cleared_tracking = next(EdsCustomAddon.db.modules.ArathiBasin.tracking) == nil
+            _G.__ab_cleared_bases = next(ab.bases) == nil
+        """)
+        if lua.eval("__ab_cleared_tracking") and lua.eval("__ab_cleared_bases"):
+            ok("ArathiBasin clears tracking when leaving AB")
+        else:
+            fail("tracking not cleared on leave")
 
     # --- BGSync ---
     bg = addon.GetModule(addon, "BGSync")

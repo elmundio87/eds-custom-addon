@@ -119,36 +119,20 @@ local function GetSlotItemInfo(slot)
     if not link then
         return nil
     end
-    local name, _, _, _, _, itemType, subType, _, equipLoc = GetItemInfo(link)
+    local _, _, _, _, _, itemType, subType, _, equipLoc = GetItemInfo(link)
     if not itemType then
         return nil
     end
     return {
         link = link,
-        name = name,
         itemType = itemType,
         subType = subType,
         equipLoc = equipLoc,
     }
 end
 
--- Clients differ: subType may be "Fishing Pole" or "Fishing Poles", equipLoc
--- either INVTYPE_FISHINGPOLE or INVTYPE_2HWEAPON.
-local function IsFishingPoleInfo(info)
-    if not info then
-        return false
-    end
-    if info.equipLoc == "INVTYPE_FISHINGPOLE" then
-        return true
-    end
-    if type(info.subType) == "string" and info.subType:find("Fishing") then
-        return true
-    end
-    return type(info.name) == "string" and info.name:find("Fishing Pole") ~= nil
-end
-
 function Windfury:IsFishingPoleEquipped()
-    return IsFishingPoleInfo(GetSlotItemInfo(INVSLOT_MAINHAND))
+    return addon:IsFishingPoleEquipped()
 end
 
 function Windfury:IsWeaponSlot(slot)

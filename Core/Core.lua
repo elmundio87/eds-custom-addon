@@ -123,6 +123,8 @@ function addon:SlashHandler(msg)
         self:Print("/eca windfury test")
         self:Print("/eca bgsync [start|cancel|status|on|off]")
         self:Print("/eca tradeskillfav [on|off|all|favourites|status]")
+        self:Print("/eca fishing [on|off|here|status]")
+        self:Print("/eca arathi [on|off|indices|status]")
         self:Print("/eca debug")
         return
     end
@@ -139,6 +141,11 @@ function addon:SlashHandler(msg)
             self:RefreshUI()
         end
         return
+    end
+
+    -- Alias: /eca arathi -> ArathiBasin module.
+    if cmd == "arathi" then
+        cmd = "arathibasin"
     end
 
     local module = self:GetModule(cmd)

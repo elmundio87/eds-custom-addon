@@ -56,6 +56,9 @@ function addon:RefreshUI()
     if panel.windfuryAlertMove and self.db.modules.Windfury then
         panel.windfuryAlertMove:SetChecked(self.db.modules.Windfury.alertMove and 1 or nil)
     end
+    if panel.arathiBasinMove and self.db.modules.ArathiBasin then
+        panel.arathiBasinMove:SetChecked(self.db.modules.ArathiBasin.move and 1 or nil)
+    end
     if panel.windfuryAlertFontSize and self.db.modules.Windfury then
         local wf = self:GetModule("Windfury")
         local size = wf and wf:GetAlertFontSize() or 12

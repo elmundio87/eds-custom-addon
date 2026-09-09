@@ -7,8 +7,10 @@ local TradeSkillFav = {
 }
 
 local ALCHEMY_NAME = "Alchemy"
--- Friz Quadrata has no ★; raid-target 1 is a yellow star in 3.3.5.
-local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12:0:0|t"
+-- Friz Quadrata has no ★; raid-target 1 is a yellow star in 3.3.5. Drawn as a
+-- texture in the row indent: inline text would push the [n] count off the frame.
+local STAR_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1"
+local STAR_SIZE = 12
 local DISPLAYED = 8
 
 local function GetConfig()
@@ -223,19 +225,47 @@ function TradeSkillFav:SetButtonLabel(button, label)
     end
 end
 
-function TradeSkillFav:SetButtonCount(button, numAvailable)
+-- Blizzard widens the name font string for headers and empty counts, which
+-- would strand our [n] at the far right of a reused row.
+function TradeSkillFav:SetButtonCount(button, numAvailable, label)
     local name = button and button.GetName and button:GetName()
     if not name then
         return
     end
+    local textWidth = TRADE_SKILL_TEXT_WIDTH or 260
+    local fs = _G[name .. "Text"]
     local count = _G[name .. "Count"]
     if not count or not count.SetText then
         return
     end
-    if numAvailable and numAvailable > 0 then
-        count:SetText("[" .. numAvailable .. "]")
-    else
+    if not numAvailable or numAvailable <= 0 then
         count:SetText("")
+        if fs and fs.SetWidth then
+            fs:SetWidth(textWidth)
+        end
+        return
+    end
+    count:SetText("[" .. numAvailable .. "]")
+    if not fs or not fs.SetWidth then
+        return
+    end
+    fs:SetWidth(0)
+    if not label or not TradeSkillFrameDummyString or not count.GetWidth then
+        return
+    end
+    TradeSkillFrameDummyString:SetText(label)
+    local nameWidth = TradeSkillFrameDummyString:GetWidth() or 0
+    local countWidth = count:GetWidth() or 0
+    if nameWidth + 2 + countWidth > textWidth then
+        fs:SetWidth(textWidth - 2 - countWidth)
+    end
+end
+
+function TradeSkillFav:SetRowHighlightTexture(button, path)
+    local name = button.GetName and button:GetName()
+    local highlight = name and _G[name .. "Highlight"]
+    if highlight and highlight.SetTexture then
+        highlight:SetTexture(path)
     end
 end
 
@@ -243,6 +273,7 @@ function TradeSkillFav:ApplyHeaderLook(button)
     if button.SetNormalTexture then
         button:SetNormalTexture("Interface\\Buttons\\UI-MinusButton-Up")
     end
+    self:SetRowHighlightTexture(button, "Interface\\Buttons\\UI-PlusButton-Hilight")
     local tex = button.GetNormalTexture and button:GetNormalTexture()
     if tex and tex.SetPoint then
         tex:SetPoint("LEFT", button, "LEFT", 3, 0)
@@ -264,10 +295,30 @@ function TradeSkillFav:ApplyRecipeLook(button)
     if button.SetNormalTexture then
         button:SetNormalTexture("")
     end
+    self:SetRowHighlightTexture(button, "")
     local name = button.GetName and button:GetName()
     local fs = name and _G[name .. "Text"]
     if fs and fs.SetPoint then
         fs:SetPoint("LEFT", 23, 0)
+    end
+end
+
+function TradeSkillFav:SetButtonStar(button, show)
+    if not button.favStar then
+        if not button.CreateTexture then
+            return
+        end
+        local star = button:CreateTexture(nil, "OVERLAY")
+        star:SetTexture(STAR_TEXTURE)
+        star:SetWidth(STAR_SIZE)
+        star:SetHeight(STAR_SIZE)
+        star:SetPoint("LEFT", button, "LEFT", 8, 0)
+        button.favStar = star
+    end
+    if show then
+        button.favStar:Show()
+    else
+        button.favStar:Hide()
     end
 end
 
@@ -276,13 +327,15 @@ function TradeSkillFav:PaintSkillButton(button, entry)
         return
     end
     if not entry then
+        self:SetButtonStar(button, false)
         button:Hide()
         return
     end
     if entry.header then
+        self:SetButtonStar(button, false)
         self:ApplyHeaderLook(button)
         self:SetButtonLabel(button, entry.name)
-        self:SetButtonCount(button, 0)
+        self:SetButtonCount(button, 0, entry.name)
         if button.SetID then
             button:SetID(0)
         end
@@ -293,16 +346,14 @@ function TradeSkillFav:PaintSkillButton(button, entry)
     local index = entry.index
     local name, skillType, numAvailable = GetTradeSkillInfo(index)
     if not name then
+        self:SetButtonStar(button, false)
         button:Hide()
         return
     end
     self:ApplyRecipeLook(button)
-    local label = name
-    if self:IsFavoriteKey(entry.key) then
-        label = STAR .. " " .. name
-    end
-    self:SetButtonLabel(button, label)
-    self:SetButtonCount(button, numAvailable)
+    self:SetButtonStar(button, self:IsFavoriteKey(entry.key))
+    self:SetButtonLabel(button, name)
+    self:SetButtonCount(button, numAvailable, name)
     if button.SetID then
         button:SetID(index)
     end
@@ -320,13 +371,18 @@ function TradeSkillFav:DecorateBlizzardList()
     local count = self:GetDisplayedCount()
     for i = 1, count do
         local button = _G["TradeSkillSkill" .. i]
-        if button and button:IsShown() then
+        if button then
             local index = button.GetID and button:GetID()
-            if index and self:IsFavoriteIndex(index) then
-                local fs, text = self:GetButtonText(button)
-                if fs and text ~= "" and not text:find(STAR, 1, true) then
-                    fs:SetText(STAR .. " " .. text)
-                end
+            local skillType
+            if index and index > 0 then
+                _, skillType = GetTradeSkillInfo(index)
+            end
+            if button:IsShown() and skillType and skillType ~= "header" then
+                -- Keep the name clear of the star's indent slot.
+                self:ApplyRecipeLook(button)
+                self:SetButtonStar(button, self:IsFavoriteIndex(index))
+            else
+                self:SetButtonStar(button, false)
             end
         end
     end
@@ -341,10 +397,31 @@ function TradeSkillFav:PaintCustomList()
         FauxScrollFrame_Update(TradeSkillListScrollFrame, #list, count, rowHeight)
         offset = self:GetScrollOffset()
     end
+    -- Blizzard anchors the selection bar by list position, which our reordered
+    -- rows invalidate, so place it on the row actually holding the selection.
+    local selection = GetTradeSkillSelectionIndex and GetTradeSkillSelectionIndex() or 0
     for i = 1, count do
         local button = _G["TradeSkillSkill" .. i]
         local entry = list[i + offset]
         self:PaintSkillButton(button, entry)
+        local selected = entry and not entry.header and entry.index == selection
+        if button then
+            if selected then
+                if TradeSkillHighlightFrame then
+                    TradeSkillHighlightFrame:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+                    TradeSkillHighlightFrame:Show()
+                end
+                if button.LockHighlight then
+                    button:LockHighlight()
+                end
+                button.isHighlighted = true
+            else
+                if button.UnlockHighlight then
+                    button:UnlockHighlight()
+                end
+                button.isHighlighted = false
+            end
+        end
     end
 end
 

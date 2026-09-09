@@ -47,6 +47,21 @@ addon.defaults = {
             mode = "all",
             favorites = {},
         },
+        Fishing = {
+            enabled = true,
+        },
+        ArathiBasin = {
+            enabled = true,
+            move = false,
+            tracking = {},
+            frame = {
+                point = "CENTER",
+                relativePoint = "CENTER",
+                x = 0,
+                y = 160,
+                fontSize = 12,
+            },
+        },
     },
 }
 

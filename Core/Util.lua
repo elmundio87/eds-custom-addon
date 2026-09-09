@@ -21,6 +21,23 @@ function addon:Debug(msg)
     end
 end
 
+-- Clients differ: subType may be "Fishing Pole" or "Fishing Poles", equipLoc
+-- either INVTYPE_FISHINGPOLE or INVTYPE_2HWEAPON.
+function addon:IsFishingPoleEquipped()
+    local link = GetInventoryItemLink("player", INVSLOT_MAINHAND or 16)
+    if not link then
+        return false
+    end
+    local name, _, _, _, _, _, subType, _, equipLoc = GetItemInfo(link)
+    if equipLoc == "INVTYPE_FISHINGPOLE" then
+        return true
+    end
+    if type(subType) == "string" and subType:find("Fishing") then
+        return true
+    end
+    return type(name) == "string" and name:find("Fishing Pole") ~= nil
+end
+
 -- 3.3.5 has no C_Timer. Debounce via a hidden OnUpdate frame.
 local debounceFrame = CreateFrame("Frame")
 local pending = {}

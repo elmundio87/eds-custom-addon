@@ -24,6 +24,11 @@ WotLK 3.3.5a (`Interface: 30300`) addon for a private AzerothCore / ChromieCraft
 | `/eca bgsync on` / `/eca bgsync off` | Enable or disable the BG sync module |
 | `/eca tradeskillfav` | Alchemy favorites status |
 | `/eca tradeskillfav all\|favourites` | Filter Alchemy list: All or Favourites |
+| `/eca fishing here` | Move the FISH button to the cursor |
+| `/eca fishing on` / `/eca fishing off` | Enable or disable the FISH button |
+| `/eca arathi` | Arathi Basin timer status |
+| `/eca arathi indices` | Dump base landmark texture indices (for mapping) |
+| `/eca arathi on` / `/eca arathi off` | Enable or disable Arathi Basin timers |
 | `/eca debug` | Toggle debug prints |
 
 ## Party XP
@@ -45,6 +50,14 @@ While inside a battleground, `/eca bgsync` reads the scoreboard, excludes you an
 ## Alchemy favorites
 
 On the Alchemy trade skill window: the **+** / **-** button toggles the selected recipe (star marker stays next to favorited names). **Filter** dropdown: **All** or **Favourites** (Favourites header). Saved per character by item id. Toggle via **Alchemy favorites** on `/eca ui`, or `/eca tradeskillfav [on|off|all|favourites|status]`.
+
+## Fishing button
+
+Equip a fishing pole and a small **FISH** button appears at your cursor; clicking it casts Fishing through a secure action button. After a click it fades out over 1.5s and hides, so it is out of the way while the bobber is down; it comes back at the cursor on the next inventory change. It follows the pole: unequip and it hides. `/eca fishing here` respawns it wherever the cursor is. Combat lockdown blocks moving or showing secure buttons, so it waits until you leave combat. Toggle via **Fishing button** on `/eca ui`.
+
+## Arathi Basin timers
+
+In Arathi Basin, a movable frame tracks each base. Status is relative to you: **Holding**, **Occupied**, **Unclaimed**, **Taking** (you assaulting), **Defending** (yours under attack). When a base's map landmark icon changes (assault), a **60s** gold countdown starts; the next change (capture or defend) clears it. Index, owner text, and remaining time are saved per character so timers survive `/reload`. Landmark reads call `SetMapToCurrentZone` only when needed and never on the timer tick. `/eca arathi indices` dumps `name = textureIndex (description)`. Enable **Move Arathi Basin timers** on `/eca ui` to drag the frame while you are in AB.
 
 ## Windfury proc
 

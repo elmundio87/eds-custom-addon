@@ -1,6 +1,7 @@
 -- Offline WoW 3.3.5a stub for loading Eds Custom Addon under LuaJIT/lupa.
 wow = {
     time = 0,
+    wallClock = 1e9,
     frames = {},
     sent = {},
     prints = {},
@@ -17,6 +18,7 @@ wow = {
         playerName = "Ed",
         playerGUID = "0x0000000000000001",
         playerClass = "SHAMAN",
+        playerFaction = "Alliance",
         ghost = false,
         inventory = {},
         weaponEnchants = { main = false, off = false, mainExp = 0, offExp = 0 },
@@ -25,10 +27,16 @@ wow = {
         targetHealthMax = 0,
         playerLevel = 80,
         instanceType = "none",
+        zoneText = "",
+        landmarks = {},
+        mapZoneSets = 0,
         bgScores = {},
         bgScoreRequests = 0,
         friends = {},
         inCombat = false,
+        cursor = { x = 0, y = 0 },
+        uiScale = 1,
+        spells = { [7620] = "Fishing" },
         cvars = {
             Sound_MusicVolume = "1",
         },
@@ -44,7 +52,12 @@ wow = {
 tinsert = table.insert
 UISpecialFrames = wow.specialFrames
 SlashCmdList = {}
-UIParent = { name = "UIParent" }
+UIParent = {
+    name = "UIParent",
+    GetEffectiveScale = function()
+        return wow.state.uiScale or 1
+    end,
+}
 
 local Frame = {}
 Frame.__index = Frame
@@ -97,6 +110,15 @@ function Frame:SetWidth(v) self.width = v end
 function Frame:SetHeight(v) self.height = v end
 function Frame:SetSize(w, h) self.width = w; self.height = h end
 function Frame:SetFrameStrata() end
+function Frame:SetAlpha(value)
+    self.alpha = value
+end
+function Frame:GetAlpha()
+    return self.alpha or 1
+end
+function Frame:GetEffectiveScale()
+    return wow.state.uiScale or 1
+end
 function Frame:SetToplevel() end
 function Frame:SetClampedToScreen() end
 function Frame:SetMovable() end
@@ -108,7 +130,6 @@ function Frame:StopMovingOrSizing() end
 function Frame:SetBackdrop() end
 function Frame:SetBackdropColor() end
 function Frame:SetBackdropBorderColor() end
-function Frame:ClearAllPoints() end
 function Frame:SetFrameLevel(level)
     self.frameLevel = level or 1
 end
@@ -157,9 +178,24 @@ function Frame:SetNormalTexture() end
 function Frame:GetNormalTexture()
     return nil
 end
-function Frame:UnlockHighlight() end
+function Frame:UnlockHighlight()
+    self.highlighted = false
+end
+function Frame:LockHighlight()
+    self.highlighted = true
+end
+function Frame:GetWidth()
+    return self.width or 0
+end
+function Frame:SetVertexColor(r, g, b)
+    self.vertexColor = { r, g, b }
+end
+function Frame:SetNormalFontObject() end
 function Frame:GetID()
     return self.id
+end
+function Frame:GetName()
+    return self.name
 end
 function Frame:GetScript(hook)
     return self.scripts[hook]
@@ -179,6 +215,16 @@ end
 
 function Frame:CreateFontString()
     return newFrame("FontString", nil, self)
+end
+
+function Frame:CreateTexture()
+    local texture = newFrame("Texture", nil, self)
+    texture:Hide()
+    return texture
+end
+
+function Frame:SetTexture(path)
+    self.texture = path
 end
 
 function Frame:SetText(text)
@@ -207,6 +253,11 @@ function Frame:SetAutoFocus() end
 function Frame:SetFontObject() end
 function Frame:SetNumeric() end
 function Frame:SetMaxLetters() end
+function Frame:SetJustifyH() end
+function Frame:SetJustifyV() end
+function Frame:ClearAllPoints()
+    self.point = { "CENTER", nil, "CENTER", 0, 0 }
+end
 function Frame:ClearFocus() end
 function Frame:SetFocus() end
 function Frame:HighlightText() end
@@ -258,6 +309,10 @@ function GetTime()
     return wow.time
 end
 
+function time()
+    return math.floor(wow.wallClock or 0)
+end
+
 function GetNumRaidMembers()
     return wow.state.raidCount
 end
@@ -297,6 +352,16 @@ end
 
 function InCombatLockdown()
     return wow.state.inCombat and 1 or nil
+end
+
+function GetCursorPosition()
+    local cursor = wow.state.cursor or {}
+    return cursor.x or 0, cursor.y or 0
+end
+
+function GetSpellInfo(spellId)
+    local spell = wow.state.spells and wow.state.spells[spellId]
+    return spell or "Spell " .. tostring(spellId)
 end
 
 function GetCVar(name)
@@ -406,6 +471,32 @@ function IsInInstance()
     return 1, kind
 end
 
+function GetRealZoneText()
+    return wow.state.zoneText or ""
+end
+
+function GetNumMapLandmarks()
+    local landmarks = wow.state.landmarks
+    if type(landmarks) ~= "table" then
+        return 0
+    end
+    return #landmarks
+end
+
+function GetMapLandmarkInfo(index)
+    local landmarks = wow.state.landmarks
+    local entry = landmarks and landmarks[index]
+    if not entry then
+        return nil
+    end
+    return entry.name, entry.description or "", entry.index or entry.textureIndex or 0, entry.x or 0, entry.y or 0, entry.mapLinkID
+end
+
+function SetMapToCurrentZone()
+    wow.state.mapZoneSets = (wow.state.mapZoneSets or 0) + 1
+    wow.state.mapZone = wow.state.zoneText
+end
+
 function RequestBattlefieldScoreData()
     wow.state.bgScoreRequests = (wow.state.bgScoreRequests or 0) + 1
 end
@@ -485,6 +576,13 @@ function UnitClass(unit)
         return "Shaman", wow.state.playerClass or "SHAMAN"
     end
     return "Unknown", "UNKNOWN"
+end
+
+function UnitFactionGroup(unit)
+    if unit == "player" then
+        return wow.state.playerFaction or "Alliance", wow.state.playerFaction or "Alliance"
+    end
+    return nil
 end
 
 function GetInventoryItemLink(unit, slot)
@@ -725,6 +823,7 @@ end
 function wow.tick(elapsed)
     elapsed = elapsed or 0.05
     wow.time = wow.time + elapsed
+    wow.wallClock = (wow.wallClock or 0) + elapsed
     for _, frame in ipairs(wow.frames) do
         if frame.shown and frame.scripts.OnUpdate then
             frame.scripts.OnUpdate(frame, elapsed)
@@ -843,10 +942,41 @@ end
 
 function wow.resetBattleground()
     wow.state.instanceType = "none"
+    wow.state.zoneText = ""
+    wow.state.landmarks = {}
+    wow.state.mapZoneSets = 0
     wow.state.bgScores = {}
     wow.state.bgScoreRequests = 0
     wow.state.playerLevel = 80
     wow.state.friends = {}
+    if WorldMapFrame then
+        WorldMapFrame:Hide()
+    end
+end
+
+function wow.setLandmarks(entries)
+    local landmarks = {}
+    if type(entries) == "table" then
+        for i, entry in ipairs(entries) do
+            if type(entry) == "table" then
+                landmarks[i] = {
+                    name = entry.name,
+                    description = entry.description or "",
+                    index = entry.index or entry.textureIndex or 0,
+                    x = entry.x or 0,
+                    y = entry.y or 0,
+                }
+            end
+        end
+    end
+    wow.state.landmarks = landmarks
+end
+
+function wow.setArathiBasin(landmarks)
+    wow.state.instanceType = "pvp"
+    wow.state.zoneText = "Arathi Basin"
+    wow.state.mapZoneSets = 0
+    wow.setLandmarks(landmarks)
 end
 
 function wow.setBattleground(names, level)
@@ -878,9 +1008,19 @@ TradeSkillFrame = CreateFrame("Frame", "TradeSkillFrame", UIParent)
 TradeSkillFrame:Hide()
 TradeSkillListScrollFrame = CreateFrame("ScrollFrame", "TradeSkillListScrollFrame", TradeSkillFrame)
 TradeSkillListScrollFrame.offset = 0
+TradeSkillHighlightFrame = CreateFrame("Frame", "TradeSkillHighlightFrame", TradeSkillFrame)
+TradeSkillHighlightFrame:Hide()
+TradeSkillFrameDummyString = CreateFrame("FontString", "TradeSkillFrameDummyString", TradeSkillFrame)
+TRADE_SKILL_TEXT_WIDTH = 260
 for i = 1, 8 do
     local button = CreateFrame("Button", "TradeSkillSkill" .. i, TradeSkillFrame)
+    CreateFrame("FontString", "TradeSkillSkill" .. i .. "Text", button)
+    CreateFrame("FontString", "TradeSkillSkill" .. i .. "Count", button)
+    CreateFrame("Texture", "TradeSkillSkill" .. i .. "Highlight", button)
     button:Hide()
 end
+
+WorldMapFrame = CreateFrame("Frame", "WorldMapFrame", UIParent)
+WorldMapFrame:Hide()
 
 wow.resetTradeSkill()

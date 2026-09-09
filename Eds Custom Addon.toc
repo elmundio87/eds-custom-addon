@@ -14,3 +14,5 @@ Sounds\manifest.lua
 Modules\Windfury\Windfury.lua
 Modules\BGSync\BGSync.lua
 Modules\TradeSkillFav\TradeSkillFav.lua
+Modules\Fishing\Fishing.lua
+Modules\ArathiBasin\ArathiBasin.lua
