@@ -32,6 +32,12 @@ wow = {
         cvars = {
             Sound_MusicVolume = "1",
         },
+        tradeSkill = {
+            line = "Alchemy",
+            selection = 2,
+            scrollOffset = 0,
+            skills = {},
+        },
     },
 }
 
@@ -144,6 +150,20 @@ function Frame:SetScrollChild(child)
         child.parent = self
     end
 end
+function Frame:SetID(id)
+    self.id = id
+end
+function Frame:SetNormalTexture() end
+function Frame:GetNormalTexture()
+    return nil
+end
+function Frame:UnlockHighlight() end
+function Frame:GetID()
+    return self.id
+end
+function Frame:GetScript(hook)
+    return self.scripts[hook]
+end
 function Frame:SetHighlightTexture() end
 function Frame:Disable() self.disabled = true end
 function Frame:Enable() self.disabled = nil end
@@ -207,6 +227,33 @@ function CreateFrame(kind, name, parent, template)
     return newFrame(kind, name, parent, template)
 end
 
+UIDROPDOWNMENU_MENU_LEVEL = 1
+
+function UIDropDownMenu_CreateInfo()
+    return {}
+end
+
+function UIDropDownMenu_Initialize(frame, initFunction)
+    if type(initFunction) == "function" then
+        initFunction(frame, UIDROPDOWNMENU_MENU_LEVEL)
+    end
+end
+
+function UIDropDownMenu_SetWidth(frame, width)
+    if frame then
+        frame:SetWidth(width)
+    end
+end
+
+function UIDropDownMenu_SetText(frame, text)
+    if frame then
+        frame.dropdownText = text
+    end
+end
+
+function UIDropDownMenu_AddButton(info, level)
+end
+
 function GetTime()
     return wow.time
 end
@@ -266,6 +313,90 @@ function SetCVar(name, value)
     end
     wow.state.cvars[name] = tostring(value)
 end
+
+function hooksecurefunc(name, hook)
+    local orig = _G[name]
+    if type(orig) ~= "function" then
+        return
+    end
+    _G[name] = function(...)
+        orig(...)
+        hook(...)
+    end
+end
+
+function GetTradeSkillLine()
+    local ts = wow.state.tradeSkill
+    return ts and ts.line or "Unknown"
+end
+
+function GetNumTradeSkills()
+    local ts = wow.state.tradeSkill
+    if not ts or type(ts.skills) ~= "table" then
+        return 0
+    end
+    return #ts.skills
+end
+
+function GetTradeSkillInfo(index)
+    local ts = wow.state.tradeSkill
+    local skill = ts and ts.skills and ts.skills[index]
+    if not skill then
+        return nil
+    end
+    return skill.name, skill.type or "trivial", skill.available or 0, skill.expanded and 1 or nil
+end
+
+function GetTradeSkillItemLink(index)
+    local ts = wow.state.tradeSkill
+    local skill = ts and ts.skills and ts.skills[index]
+    return skill and skill.link or nil
+end
+
+function GetTradeSkillSelectionIndex()
+    local ts = wow.state.tradeSkill
+    return ts and ts.selection or 0
+end
+
+function SelectTradeSkill(index)
+    if wow.state.tradeSkill then
+        wow.state.tradeSkill.selection = index
+    end
+end
+
+function ExpandTradeSkillSubClass(index)
+    local ts = wow.state.tradeSkill
+    local skill = ts and ts.skills and ts.skills[index]
+    if skill then
+        skill.expanded = true
+    end
+end
+
+function FauxScrollFrame_GetOffset(frame)
+    if frame and frame.offset then
+        return frame.offset
+    end
+    local ts = wow.state.tradeSkill
+    return ts and ts.scrollOffset or 0
+end
+
+function FauxScrollFrame_Update(frame, numItems, numToDisplay, buttonHeight)
+    if frame then
+        frame.numItems = numItems
+        frame.numToDisplay = numToDisplay
+        frame.buttonHeight = buttonHeight
+    end
+end
+
+function TradeSkillFrame_SetSelection(index)
+    SelectTradeSkill(index)
+end
+
+function TradeSkillFrame_Update()
+    -- Stub: real client paints skill buttons; tests call module paint helpers.
+end
+
+TRADE_SKILLS_DISPLAYED = 8
 
 function IsInInstance()
     local kind = wow.state.instanceType or "none"
@@ -630,6 +761,35 @@ function wow.resetInventory()
     wow.state.playerClass = "SHAMAN"
 end
 
+function wow.resetTradeSkill()
+    wow.state.tradeSkill = {
+        line = "Alchemy",
+        selection = 2,
+        scrollOffset = 0,
+        skills = {
+            { name = "Elixirs", type = "header", expanded = true },
+            {
+                name = "Minor Healing Potion",
+                type = "easy",
+                available = 3,
+                link = "|cff9d9d9d|Hitem:118:0:0:0:0:0:0:0|h[Minor Healing Potion]|h|r",
+            },
+            {
+                name = "Elixir of Lion's Strength",
+                type = "medium",
+                available = 1,
+                link = "|cff1eff00|Hitem:2454:0:0:0:0:0:0:0|h[Elixir of Lion's Strength]|h|r",
+            },
+            {
+                name = "Swiftness Potion",
+                type = "optimal",
+                available = 0,
+                link = "|cff1eff00|Hitem:2459:0:0:0:0:0:0:0|h[Swiftness Potion]|h|r",
+            },
+        },
+    }
+end
+
 function wow.setInventorySlot(slot, item)
     wow.state.inventory[slot] = item
     if item and item.enchantText and item.enchantText ~= "" then
@@ -713,3 +873,14 @@ function wow.setFriends(names)
     end
     wow.state.friends = friends
 end
+
+TradeSkillFrame = CreateFrame("Frame", "TradeSkillFrame", UIParent)
+TradeSkillFrame:Hide()
+TradeSkillListScrollFrame = CreateFrame("ScrollFrame", "TradeSkillListScrollFrame", TradeSkillFrame)
+TradeSkillListScrollFrame.offset = 0
+for i = 1, 8 do
+    local button = CreateFrame("Button", "TradeSkillSkill" .. i, TradeSkillFrame)
+    button:Hide()
+end
+
+wow.resetTradeSkill()

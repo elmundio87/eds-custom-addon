@@ -42,6 +42,11 @@ addon.defaults = {
             stepDelay = 0.4,
             settleDelay = 1.0,
         },
+        TradeSkillFav = {
+            enabled = true,
+            mode = "all",
+            favorites = {},
+        },
     },
 }
 

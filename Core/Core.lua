@@ -122,6 +122,7 @@ function addon:SlashHandler(msg)
         self:Print("/eca partyxp on|off|pause|unpause|force|unforce|status")
         self:Print("/eca windfury test")
         self:Print("/eca bgsync [start|cancel|status|on|off]")
+        self:Print("/eca tradeskillfav [on|off|all|favourites|status]")
         self:Print("/eca debug")
         return
     end

@@ -144,6 +144,7 @@ def lint_toc() -> None:
         "Sounds/manifest.lua",
         "Modules/Windfury/Windfury.lua",
         "Modules/BGSync/BGSync.lua",
+        "Modules/TradeSkillFav/TradeSkillFav.lua",
     ]
     if files == expected:
         ok("TOC load order")
@@ -192,6 +193,11 @@ def lint_lua_static() -> None:
         ok("BGSync registers itself")
     else:
         fail("BGSync.lua does not call RegisterModule")
+    tsf = (ROOT / "Modules" / "TradeSkillFav" / "TradeSkillFav.lua").read_text(encoding="utf-8")
+    if "RegisterModule" in tsf:
+        ok("TradeSkillFav registers itself")
+    else:
+        fail("TradeSkillFav.lua does not call RegisterModule")
 
 
 def lint_syntax(lua) -> None:
@@ -2011,6 +2017,37 @@ def test_addon(lua) -> None:
 
     wow.resetInventory()
     lua.execute("""
+        wow.setInventorySlot(16, {
+            link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Pole]|h|r",
+            name = "Nat Pagle's Extreme Angler FC-5000",
+            itemType = "Weapon",
+            subType = "Fishing Poles",
+            equipLoc = "INVTYPE_FISHINGPOLE",
+        })
+    """)
+    wf.UpdateAlert(wf)
+    alert = lua.eval("ECA_WindfuryAlert")
+    if alert and not alert.shown:
+        ok("WF alert hidden for fishing pole subtype variants")
+    else:
+        fail("WF alert shown for INVTYPE_FISHINGPOLE pole")
+
+    wow.resetChat()
+    lua.execute("""
+        local wf = EdsCustomAddon:GetModule("Windfury")
+        wf.expiryWarned = {}
+        wf.lastRemaining = {}
+        wow.state.weaponEnchants = { main = true, mainExp = 30 * 1000, off = false, offExp = 0 }
+        wf:CheckEnchantExpiry()
+        _G.__wf_pole_expiry = #wow.combatText
+    """)
+    if lua.eval("__wf_pole_expiry") == 0:
+        ok("WF expiry warning silent while holding fishing pole")
+    else:
+        fail("expiry warning fired with fishing pole equipped")
+
+    wow.resetInventory()
+    lua.execute("""
         wow.state.playerClass = "WARRIOR"
         wow.setInventorySlot(16, {
             link = "|cff9d9d9d|Hitem:16:0:0:0:0:0:0:0|h[Axe]|h|r",
@@ -2438,6 +2475,89 @@ def test_addon(lua) -> None:
         ok("unknown slash is reported")
     else:
         fail(f"unknown command prints {prints}")
+
+    # --- TradeSkillFav ---
+    tsf = addon.GetModule(addon, "TradeSkillFav")
+    if tsf is None:
+        fail("TradeSkillFav not registered")
+    else:
+        ok("TradeSkillFav registered")
+        if tsf.enabled:
+            ok("TradeSkillFav enabled by default")
+        else:
+            fail("TradeSkillFav should default to enabled")
+
+        wow.resetChat()
+        lua.execute("""
+            wow.resetTradeSkill()
+            EdsCustomAddon.db.modules.TradeSkillFav.favorites = {}
+            EdsCustomAddon.db.modules.TradeSkillFav.mode = "all"
+            local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
+            local key = tsf:RecipeKey(2)
+            assert(key == "item:118", "expected item:118 got "..tostring(key))
+        """)
+        ok("TradeSkillFav RecipeKey uses item id")
+
+        lua.execute("""
+            local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
+            wow.state.tradeSkill.selection = 2
+            tsf:ToggleSelectedFavorite()
+        """)
+        fav = lua.eval(
+            'EdsCustomAddon.db.modules.TradeSkillFav.favorites.Alchemy["item:118"]'
+        )
+        if fav:
+            ok("TradeSkillFav toggles favorite for selected recipe")
+        else:
+            fail(f"favorite not saved {fav}")
+
+        lua.execute("""
+            local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
+            EdsCustomAddon.db.modules.TradeSkillFav.mode = "only"
+            local list = tsf:BuildDisplayList()
+            _G.__tsf_only_count = #list
+            _G.__tsf_only_header = list[1] and list[1].header and list[1].name
+            _G.__tsf_only_name = list[2] and list[2].name
+        """)
+        only_count = lua.eval("__tsf_only_count")
+        only_header = lua.eval("__tsf_only_header")
+        only_name = lua.eval("__tsf_only_name")
+        if only_count == 2 and only_header == "Favourites" and only_name == "Minor Healing Potion":
+            ok("TradeSkillFav filter=Favourites shows under Favourites header")
+        else:
+            fail(f"only list count={only_count} header={only_header} name={only_name}")
+
+        lua.execute("""
+            local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
+            EdsCustomAddon.db.modules.TradeSkillFav.mode = "all"
+            wow.state.tradeSkill.selection = 2
+            tsf:SetAlchemyActive(true)
+            local button = _G.TradeSkillSkill1
+            button:SetID(2)
+            button:Show()
+            -- Blizzard rewrites the row text when the recipe is selected.
+            button:SetText("Minor Healing Potion")
+            TradeSkillFrame_SetSelection(2)
+            wow.tick(0.05)
+            _G.__tsf_sel_text = button:GetText()
+        """)
+        sel_text = lua.eval("__tsf_sel_text")
+        if "RaidTargetingIcon_1" in (sel_text or ""):
+            ok("TradeSkillFav restores star after selecting a recipe")
+        else:
+            fail(f"selected row text {sel_text}")
+
+        lua.execute("""
+            wow.state.tradeSkill.line = "Blacksmithing"
+            local tsf = EdsCustomAddon:GetModule("TradeSkillFav")
+            _G.__tsf_is_alch = tsf:IsAlchemy() and true or false
+        """)
+        is_alch = lua.eval("__tsf_is_alch")
+        if not is_alch:
+            ok("TradeSkillFav ignores non-Alchemy professions")
+        else:
+            fail("IsAlchemy true for Blacksmithing")
+        lua.execute('wow.state.tradeSkill.line = "Alchemy"')
 
     # --- BGSync ---
     bg = addon.GetModule(addon, "BGSync")
